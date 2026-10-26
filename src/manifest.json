@@ -11,5 +11,11 @@
             "run_at": "document_start"
         }
     ],
-    "options_page": "options.html"
+    "options_ui": {
+        "page": "options.html"
+    },
+    "host_permissions": [
+        "https://my.zerosumapp.com/budget/*",
+        "https://api.zerosumapp.com/*"
+    ]
 }
