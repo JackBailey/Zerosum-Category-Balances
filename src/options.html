@@ -6,17 +6,29 @@
         <link rel="stylesheet" href="options.css" />
     </head>
     <body>
-        <label for="budget-id">Budget</label>
-        <select id="budget-id"></select>
-        
-        <button id="create-group">
-            New Group
-        </button>
-        <div id="account-groups"></div>
-        <hr />
-        <div id="accounts"></div>
-        <hr />
-        <div id="categories"></div>
+        <header class="toolbar">
+            <label for="budget-id">Budget</label>
+            <select id="budget-id"></select>
+            <label for="default-group">Default group</label>
+            <select id="default-group"></select>
+            <button id="create-group" type="button">New group</button>
+        </header>
+
+        <section>
+            <h2>Account groups</h2>
+            <div id="account-groups" class="group-list"></div>
+        </section>
+
+        <section>
+            <h2>Accounts</h2>
+            <div id="accounts"></div>
+        </section>
+
+        <section>
+            <h2>Categories</h2>
+            <div id="categories"></div>
+        </section>
+
         <script src="options.js"></script>
     </body>
 </html>

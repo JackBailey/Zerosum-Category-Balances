@@ -1,3 +1,100 @@
+body {
+    font: 14px system-ui, sans-serif;
+    margin: 24px;
+    max-width: 1100px;
+}
+
+button, select, input {
+    font: inherit;
+}
+
+.toolbar {
+    align-items: end;
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+}
+
+.toolbar label {
+    display: grid;
+    gap: 4px;
+}
+
+section {
+    margin: 24px 0 36px;
+}
+
+h2 {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+.group-list {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+}
+
 .account-group {
-    border: 1px solid currentColor;
+    align-items: center;
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-radius: 6px;
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+}
+
+.account-group label {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+}
+
+.account-group input {
+    flex: 1;
+    min-width: 0;
+}
+
+.assignment-table {
+    border-collapse: collapse;
+    min-width: 520px;
+    width: 100%;
+}
+
+.assignment-table th,
+.assignment-table td {
+    border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+    padding: 9px 12px;
+    text-align: center;
+}
+
+.assignment-table th:first-child,
+.assignment-table td:first-child {
+    text-align: left;
+    width: 100%;
+}
+
+.assignment-table th {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.assignment-table .category-group-row th {
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    font-weight: 700;
+    padding-top: 16px;
+    text-align: left;
+}
+
+.assignment-table .inherited-assignment {
+    opacity: 0.65;
+}
+
+.assignment-table input {
+    height: 16px;
+    width: 16px;
+}
+
+.table-scroll {
+    overflow-x: auto;
 }
