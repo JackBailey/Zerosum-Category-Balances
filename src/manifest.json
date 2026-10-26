@@ -1,0 +1,15 @@
+{
+    "name": "Zerosum Category Balances",
+    "description": "Tie categories to accounts, to make the most of savings and keep a couple's money to ",
+    "version": "1.0",
+    "manifest_version": 3,
+    "permissions": ["storage", "activeTab", "scripting"],
+    "content_scripts": [
+        {
+            "js": ["content.js"],
+            "matches": ["https://my.zerosumapp.com/budget/*"],
+            "run_at": "document_start"
+        }
+    ],
+    "options_page": "options.html"
+}
