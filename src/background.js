@@ -8,6 +8,10 @@ const fetchJson = async path => {
 };
 
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === "zcb-open-options") {
+        api.tabs.create({ url: api.runtime.getURL("options.html") });
+        return undefined;
+    }
     if (message?.type !== "zcb-load-budget-data") return undefined;
 
     Promise.all([

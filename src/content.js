@@ -158,7 +158,7 @@ const createTransfer = async (transfer, sourceAccountId, destinationAccountId, b
     }
 };
 
-const showCategoryGroups = async () => {
+const showCategoryGroups = async ({ attach = true } = {}) => {
     const appMain = document.querySelector("#app-main");
     if (!appMain) return;
 
@@ -313,7 +313,8 @@ const showCategoryGroups = async () => {
     }
 
     overlay.append(popup);
-    appMain.append(overlay);
+    if (attach) appMain.append(overlay);
+    return overlay;
 };
 
 const addPopupStyles = () => {
@@ -398,11 +399,58 @@ const addPopupStyles = () => {
         }
         .category-balances-transfers select,
         .category-balances-transfers button {
-            background: var(--control);
+            background: var(--input);
             border: 1px solid var(--border);
             border-radius: 5px;
             color: var(--foreground);
             padding: 5px 7px;
+        }
+        .category-balances-transfer-block button,
+        .category-balances-transfers button {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            font-weight: 600;
+        }
+        .category-balances-transfer-block select {
+            background: var(--input);
+            border: 1px solid var(--border);
+            color: var(--foreground);
+        }
+        .category-balances-transfer-blocks {
+            display: grid;
+            gap: var(--spacing);
+        }
+        .category-balances-transfer-block {
+            background: var(--card);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            display: grid;
+            font-size: var(--text-sm);
+            gap: var(--spacing);
+            padding: var(--spacing);
+        }
+        .category-balances-transfer-block label {
+            align-items: center;
+            display: flex;
+            gap: var(--spacing);
+        }
+        .category-balances-transfer-block select {
+            border-radius: 8px;
+            flex: 1;
+            padding: var(--spacing);
+        }
+        .category-balances-actions {
+            display: flex;
+            gap: var(--spacing);
+            margin-top: var(--spacing);
+        }
+        .category-balances-actions button,
+        .category-balances-transfer-block button {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: var(--text-sm);
+            padding: var(--spacing);
         }
     `;
     (document.head || document.documentElement)?.append(style);
@@ -410,27 +458,76 @@ const addPopupStyles = () => {
 
 addPopupStyles();
 
-// inject sidebar button
-waitForElement("[data-slot=sidebar-group] ul", (element) => {
-    const accountsButton = element.querySelector("li:has(a[aria-label='Accounts'])");
-    
-    const existingButton = document.getElementById("category-balances-button");
-    if (existingButton) return;
+const isBudgetOverview = () => /^\/budget\/[^/]+\/?$/.test(window.location.pathname);
 
-    const categoryBalancesButton = accountsButton.cloneNode(true);
-    const anchor = categoryBalancesButton.querySelector("a");
-    anchor.setAttribute("aria-label", "Category Balances");
-    anchor.setAttribute("href", "#");
-    anchor.removeEventListener("click", () => {});
-    anchor.setAttribute("id", "category-balances-button");
-    
-    const text = categoryBalancesButton.querySelector("span.mantine-NavLink-label > span");
-    text.textContent = "Category Balances";
+const renderOverview = async () => {
+    if (!isBudgetOverview()) return;
+    const side = document.querySelector("#budget-table-side");
+    const source = side?.querySelector(":scope > section") || side?.querySelector("section");
+    if (!side || side.dataset.zcbRendering || side.querySelector("[data-zcb-overview]") || !source) return;
+    side.dataset.zcbRendering = "true";
 
-    categoryBalancesButton.addEventListener("click", event => {
-        event.preventDefault();
-        showCategoryGroups();
-    });
+    const overview = source.cloneNode(true);
+    overview.setAttribute("data-zcb-overview", "true");
+    overview.querySelectorAll("h4 svg").forEach(svg => svg.remove());
+    const heading = overview.querySelector("h4 button span");
+    if (heading) heading.textContent = "Account Balances";
 
-    element.appendChild(categoryBalancesButton);
-});
+    const overlay = await showCategoryGroups({ attach: false });
+    if (!overlay) {
+        delete side.dataset.zcbRendering;
+        return;
+    }
+    const transfers = overlay.querySelector(".category-balances-transfers");
+    overlay.remove();
+
+    const nestedSections = overview.querySelectorAll("section");
+    const content = nestedSections[nestedSections.length - 1] || overview;
+    content.replaceChildren();
+    if (transfers) {
+        const blocks = document.createElement("div");
+        blocks.className = "category-balances-transfer-blocks";
+        for (const row of transfers.querySelectorAll("tbody tr")) {
+            const block = document.createElement("article");
+            block.className = "category-balances-transfer-block";
+            const summary = document.createElement("strong");
+            summary.textContent = `${row.cells[0].textContent} => ${row.cells[1].textContent} => ${row.cells[2].textContent}`;
+            block.append(summary);
+            const fromLabel = document.createElement("label");
+            fromLabel.textContent = "From: ";
+            fromLabel.append(row.cells[3].firstElementChild);
+            const toLabel = document.createElement("label");
+            toLabel.textContent = "To: ";
+            toLabel.append(row.cells[4].firstElementChild);
+            block.append(fromLabel, toLabel, row.cells[5].firstElementChild);
+            blocks.append(block);
+        }
+        content.append(blocks);
+    }
+    const actions = document.createElement("div");
+    actions.className = "category-balances-actions";
+    const openPopup = document.createElement("button");
+    openPopup.type = "button";
+    openPopup.textContent = "Open";
+    openPopup.addEventListener("click", () => showCategoryGroups());
+    const settings = document.createElement("button");
+    settings.type = "button";
+    settings.textContent = "Settings";
+    settings.addEventListener("click", () => extensionApi.runtime.sendMessage({ type: "zcb-open-options" }));
+    actions.append(openPopup, settings);
+    content.append(actions);
+
+    source.parentElement.insertBefore(overview, source);
+    delete side.dataset.zcbRendering;
+};
+
+const initialise = () => {
+    if (isBudgetOverview()) waitForElement("#budget-table-side", renderOverview);
+    else document.querySelector("[data-zcb-overview]")?.remove();
+};
+
+initialise();
+window.addEventListener("popstate", initialise);
+window.addEventListener("hashchange", initialise);
+const overviewObserver = new MutationObserver(initialise);
+overviewObserver.observe(document.documentElement, { childList: true, subtree: true });
