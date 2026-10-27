@@ -1,4 +1,5 @@
 const API_BASE_URL = "https://api.zerosumapp.com/api/v1";
+const extensionApi = globalThis.browser ?? globalThis.chrome;
 const STORAGE_KEYS = { groups: "accountGroups", budget: "selectedBudget", defaultGroup: "defaultAccountGroup", assignments: "accountGroupAssignments" };
 
 const elements = {
@@ -11,6 +12,8 @@ const elements = {
 };
 
 let current = { budgetId: null, accounts: [], categories: [], apiAccountGroups: [] };
+
+const mirrorStorage = (key, value) => extensionApi?.storage.local.set({ [key]: value });
 
 const fetchJson = async path => {
     const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
@@ -88,7 +91,10 @@ const groups = {
     list() {
         try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.groups)) ?? []; } catch { return []; }
     },
-    save(value) { localStorage.setItem(STORAGE_KEYS.groups, JSON.stringify(value)); },
+    save(value) {
+        localStorage.setItem(STORAGE_KEYS.groups, JSON.stringify(value));
+        mirrorStorage("accountGroups", value);
+    },
     create() { this.save([...this.list(), { id: crypto.randomUUID(), name: "" }]); },
     update(group) { this.save(this.list().map(item => item.id === group.id ? group : item)); },
     remove(id) { this.save(this.list().filter(group => group.id !== id)); },
@@ -116,6 +122,7 @@ const saveAssignment = (kind, itemId, groupId) => {
     state[kind][itemId] = groupId;
     all[current.budgetId] = state;
     localStorage.setItem(STORAGE_KEYS.assignments, JSON.stringify(all));
+    mirrorStorage("accountGroupAssignments", all);
 };
 
 const removeAssignment = (kind, itemId) => {
@@ -125,6 +132,7 @@ const removeAssignment = (kind, itemId) => {
     delete state[kind][itemId];
     all[current.budgetId] = state;
     localStorage.setItem(STORAGE_KEYS.assignments, JSON.stringify(all));
+    mirrorStorage("accountGroupAssignments", all);
 };
 
 const message = (container, text) => {
@@ -305,7 +313,16 @@ const loadBudget = async budgetId => {
                     || leftGroup - rightGroup
                     || Number(left.order ?? Infinity) - Number(right.order ?? Infinity);
             });
+        mirrorStorage("accounts", current.accounts);
         current.categories = categories;
+        mirrorStorage("selectedBudget", budgetId);
+        mirrorStorage("categories", current.categories);
+        const categoryGroups = [...new Map(
+            categories
+                .filter(category => category.group?.id)
+                .map(category => [category.group.id, { id: category.group.id, name: category.group.name }]),
+        ).values()];
+        mirrorStorage("categoryGroups", categoryGroups);
         renderTables();
     } catch (error) {
         message(elements.accounts, `Unable to load accounts: ${error.message}`);
@@ -317,12 +334,23 @@ elements.createGroup.addEventListener("click", () => { groups.create(); renderGr
 elements.defaultGroup.addEventListener("change", event => {
     if (event.target.value) localStorage.setItem(STORAGE_KEYS.defaultGroup, event.target.value);
     else localStorage.removeItem(STORAGE_KEYS.defaultGroup);
+    mirrorStorage("defaultAccountGroup", event.target.value || null);
     renderTables();
 });
 elements.budget.addEventListener("change", event => loadBudget(event.target.value));
 
 const initialise = async () => {
     renderGroups();
+    mirrorStorage("accountGroups", groups.list());
+    try {
+        mirrorStorage(
+            "accountGroupAssignments",
+            JSON.parse(localStorage.getItem(STORAGE_KEYS.assignments) || "{}"),
+        );
+    } catch {
+        mirrorStorage("accountGroupAssignments", {});
+    }
+    mirrorStorage("defaultAccountGroup", localStorage.getItem(STORAGE_KEYS.defaultGroup));
     try {
         const budgets = await ZSBudgets.list();
         for (const budget of budgets) {

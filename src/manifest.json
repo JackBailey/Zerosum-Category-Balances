@@ -3,6 +3,9 @@
     "description": "Tie categories to accounts, to make the most of savings and keep a couple's money to ",
     "version": "1.0",
     "manifest_version": 3,
+    "background": {
+        "scripts": ["background.js"]
+    },
     "permissions": ["storage", "activeTab", "scripting"],
     "content_scripts": [
         {
