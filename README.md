@@ -6,7 +6,7 @@ This means you can link categories to accounts, to make the most of interest rat
 
 ## Install
 
-Download [extension.zip](https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/extension.zip) and extract `extension.crx` from it. Then drag it into your browser at [chrome://extensions](chrome://extensions).
+Download [extension.zip](https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/zerosum-category-balances.zip) and extract `extension.crx` from it. Then drag it into your browser at [chrome://extensions](chrome://extensions).
 
 It will then auto-update from GitHub.
 

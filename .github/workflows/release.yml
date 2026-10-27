@@ -37,14 +37,14 @@ jobs:
         uses: cardinalby/webext-buildtools-chrome-crx-action@v2
         with:
           zipFilePath: build/source.zip
-          crxFilePath: build/extension.crx
+          crxFilePath: build/zerosum-category-balances.crx
           privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY }}
-          updateXmlPath: build/extension.xml
-          updateXmlCodebaseUrl: https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/extension.crx
+          updateXmlPath: build/zerosum-category-balances.xml
+          updateXmlCodebaseUrl: https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/zerosum-category-balances.crx
 
       - name: Package CRX for download
         if: ${{ steps.release.outputs.release_created }}
-        run: zip -j build/extension.zip build/extension.crx
+        run: zip -j build/zerosum-category-balances.zip build/zerosum-category-balances.crx
 
       - name: Publish release assets
         if: ${{ steps.release.outputs.release_created }}
@@ -52,6 +52,6 @@ jobs:
         with:
           tag_name: ${{ steps.release.outputs.tag_name }}
           files: |
-            build/extension.zip
-            build/extension.crx
-            build/extension.xml
+            build/zerosum-category-balances.zip
+            build/zerosum-category-balances.crx
+            build/zerosum-category-balances.xml
