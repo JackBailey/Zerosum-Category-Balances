@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pack extension
+        uses: cardinalby/webext-buildtools-pack-extension-dir-action@v1
+        with:
+          extensionDir: src
+          zipFilePath: build/extension.zip
+
+      - name: Build Chrome release files
+        uses: cardinalby/webext-buildtools-chrome-crx-action@v2
+        with:
+          zipFilePath: build/extension.zip
+          crxFilePath: build/extension.crx
+          privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY }}
+          updateXmlPath: build/update.xml
+          updateXmlCodebaseUrl: https://raw.githubusercontent.com/JackBailey/Zerosum-Category-Balances/refs/heads/main/build/extension.crx
+
+      - name: Commit release files
+        uses: EndBug/add-and-commit@v10
+        with:
+          add: build
+          default_author: github_actions
+          message: "Update release files [skip ci]"
+          push: true
+        
