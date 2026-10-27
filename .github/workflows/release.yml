@@ -21,7 +21,6 @@ jobs:
         id: release
         uses: googleapis/release-please-action@v4
         with:
-          release-type: simple
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
@@ -31,17 +30,21 @@ jobs:
         uses: cardinalby/webext-buildtools-pack-extension-dir-action@v1
         with:
           extensionDir: src
-          zipFilePath: build/extension.zip
+          zipFilePath: build/source.zip
 
       - name: Build Chrome release files
         if: ${{ steps.release.outputs.release_created }}
         uses: cardinalby/webext-buildtools-chrome-crx-action@v2
         with:
-          zipFilePath: build/extension.zip
+          zipFilePath: build/source.zip
           crxFilePath: build/extension.crx
           privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY }}
           updateXmlPath: build/extension.xml
           updateXmlCodebaseUrl: https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/extension.crx
+
+      - name: Package CRX for download
+        if: ${{ steps.release.outputs.release_created }}
+        run: zip -j build/extension.zip build/extension.crx
 
       - name: Publish release assets
         if: ${{ steps.release.outputs.release_created }}
@@ -49,5 +52,6 @@ jobs:
         with:
           tag_name: ${{ steps.release.outputs.tag_name }}
           files: |
+            build/extension.zip
             build/extension.crx
             build/extension.xml
