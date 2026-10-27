@@ -405,15 +405,23 @@ const addPopupStyles = () => {
             color: var(--foreground);
             padding: 5px 7px;
         }
+        .category-balances-transfers select {
+            background: color-mix(in oklab, var(--muted) 20%, transparent);
+            border-color: color-mix(in oklab, var(--border) 60%, transparent);
+            border-style: solid;
+            border-width: 1px;
+        }
         .category-balances-transfer-block button,
         .category-balances-transfers button {
-            background: var(--primary);
-            color: var(--primary-foreground);
+            background: color-mix(in oklab, var(--muted) 40%, transparent);
+            color: var(--foreground);
             font-weight: 600;
         }
         .category-balances-transfer-block select {
-            background: var(--input);
-            border: 1px solid var(--border);
+            background: color-mix(in oklab, var(--muted) 20%, transparent);
+            border-color: color-mix(in oklab, var(--border) 60%, transparent);
+            border-style: solid;
+            border-width: 1px;
             color: var(--foreground);
         }
         .category-balances-transfer-blocks {
@@ -434,7 +442,15 @@ const addPopupStyles = () => {
             display: flex;
             gap: var(--spacing);
         }
+        .category-balances-transfer-block > strong {
+            color: var(--muted-foreground);
+            font-size: var(--text-s);
+        }
         .category-balances-transfer-block select {
+            background: color-mix(in oklab, var(--muted) 20%, transparent);
+            border-color: color-mix(in oklab, var(--border) 60%, transparent);
+            border-style: solid;
+            border-width: 1px;
             border-radius: 8px;
             flex: 1;
             padding: var(--spacing);
@@ -442,7 +458,16 @@ const addPopupStyles = () => {
         .category-balances-actions {
             display: flex;
             gap: var(--spacing);
-            margin-top: var(--spacing);
+            margin-left: auto;
+        }
+        .category-balances-actions button {
+            background: color-mix(in oklab, var(--muted) 40%, transparent);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--foreground);
+            cursor: pointer;
+            font-size: var(--text-sm);
+            padding: var(--spacing);
         }
         .category-balances-actions button,
         .category-balances-transfer-block button {
@@ -515,7 +540,16 @@ const renderOverview = async () => {
     settings.textContent = "Settings";
     settings.addEventListener("click", () => extensionApi.runtime.sendMessage({ type: "zcb-open-options" }));
     actions.append(openPopup, settings);
-    content.append(actions);
+    const overviewHeading = overview.querySelector("h4");
+    if (overviewHeading) {
+        overviewHeading.style.alignItems = "center";
+        overviewHeading.style.display = "flex";
+        const overviewHeadingButton = overviewHeading.querySelector("button");
+        if (overviewHeadingButton) overviewHeadingButton.style.flex = "1";
+        overviewHeading.append(actions);
+    } else {
+        content.append(actions);
+    }
 
     source.parentElement.insertBefore(overview, source);
     delete side.dataset.zcbRendering;
