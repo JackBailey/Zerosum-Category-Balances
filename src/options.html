@@ -14,6 +14,17 @@
             <button id="create-group" type="button">New group</button>
         </header>
 
+        <section class="config-section">
+            <h2>Configuration</h2>
+            <button id="copy-config" type="button">Copy JSON</button>
+            <label for="gist-url">Cloud saving (Gist URL)</label>
+            <input id="gist-url" type="url" placeholder="https://gist.github.com/..." />
+            <label for="gist-token">OpenGist access token</label>
+            <input id="gist-token" type="password" placeholder="og_..." autocomplete="off" />
+            <button id="use-gist" type="button">Use Gist</button>
+            <p id="config-status" role="status"></p>
+        </section>
+
         <section>
             <h2>Account groups</h2>
             <div id="account-groups" class="group-list"></div>

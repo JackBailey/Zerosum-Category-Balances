@@ -158,19 +158,36 @@ const createTransfer = async (transfer, sourceAccountId, destinationAccountId, b
     }
 };
 
+const createConfigurationError = message => {
+    const error = document.createElement("p");
+    error.className = "category-balances-empty-state category-balances-error";
+    error.setAttribute("role", "alert");
+    error.textContent = message;
+    return error;
+};
+
 const showCategoryGroups = async ({ attach = true } = {}) => {
     const appMain = document.querySelector("#app-main");
     if (!appMain) return;
 
     const stored = await extensionApi.storage.local.get([
-        "accountGroups", "accountGroupAssignments", "accounts", "categories", "defaultAccountGroup", "selectedBudget",
+        "accountGroups", "accountGroupAssignments", "accounts", "categories", "defaultAccountGroup", "selectedBudget", "cloudGistUrl", "cloudGistToken",
     ]);
-    const accountGroups = stored.accountGroups ?? [];
+    let accountGroups = stored.accountGroups ?? [];
     const budgetId = stored.selectedBudget || window.location.pathname.split("/")[2];
-    const assignments = stored.accountGroupAssignments?.[budgetId] ?? {
+    let allAssignments = stored.accountGroupAssignments ?? {};
+    let defaultGroupId = stored.defaultAccountGroup || null;
+    if (stored.cloudGistUrl) {
+        const cloud = await extensionApi.runtime.sendMessage({ type: "zcb-load-cloud-config", url: stored.cloudGistUrl, token: stored.cloudGistToken });
+        if (cloud?.ok && cloud.config) {
+            accountGroups = cloud.config.accountGroups ?? accountGroups;
+            allAssignments = cloud.config.accountGroupAssignments ?? allAssignments;
+            defaultGroupId = cloud.config.defaultAccountGroup ?? defaultGroupId;
+        }
+    }
+    const assignments = allAssignments[budgetId] ?? {
         accounts: {}, categories: {}, categoryGroups: {},
     };
-    const defaultGroupId = stored.defaultAccountGroup || null;
     let accounts = stored.accounts ?? [];
     let categories = stored.categories ?? [];
     try {
@@ -230,10 +247,19 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
     heading.textContent = "Category balances";
     popup.append(close, heading);
 
-    if (!accountGroups.length) {
-        const empty = document.createElement("p");
-        empty.textContent = "No account groups configured yet.";
-        popup.append(empty);
+    const hasGroupedAccounts = summaries.some(summary => summary.accounts.length);
+    if (!accountGroups.length || !accounts.length || !hasGroupedAccounts) {
+        let message = "";
+        if (!accountGroups.length && !accounts.length) {
+            message = "No account groups or accounts are configured yet. Open Settings to create a group and add accounts to this budget.";
+        } else if (!accountGroups.length) {
+            message = "No account groups are configured yet. Open Settings to create one before using Account Balances.";
+        } else if (!accounts.length) {
+            message = "No accounts were found in this budget. Add an account before using Account Balances.";
+        } else {
+            message = "No accounts are assigned to an account group yet. Open Settings to assign an account before using Account Balances.";
+        }
+        popup.append(createConfigurationError(message));
     } else {
         const summaryList = document.createElement("div");
         summaryList.className = "category-balances-summary";
@@ -429,13 +455,11 @@ const addPopupStyles = () => {
             gap: var(--spacing);
         }
         .category-balances-transfer-block {
-            background: var(--card);
-            border: 1px solid var(--border-subtle);
-            border-radius: 8px;
             display: grid;
             font-size: var(--text-sm);
             gap: var(--spacing);
             padding: var(--spacing);
+            margin-bottom: var(--spacing);
         }
         .category-balances-transfer-block label {
             align-items: center;
@@ -477,6 +501,12 @@ const addPopupStyles = () => {
             font-size: var(--text-sm);
             padding: var(--spacing);
         }
+        .category-balances-empty-state {
+            margin: 0;
+        }
+        .category-balances-error {
+            color: var(--destructive, #c0392b);
+        }
     `;
     (document.head || document.documentElement)?.append(style);
 };
@@ -509,6 +539,8 @@ const renderOverview = async () => {
     const nestedSections = overview.querySelectorAll("section");
     const content = nestedSections[nestedSections.length - 1] || overview;
     content.replaceChildren();
+    const error = overlay.querySelector(".category-balances-error");
+    if (error) content.append(error.cloneNode(true));
     if (transfers) {
         const blocks = document.createElement("div");
         blocks.className = "category-balances-transfer-blocks";

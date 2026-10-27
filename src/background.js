@@ -7,10 +7,55 @@ const fetchJson = async path => {
     return response.json();
 };
 
+const parseGistUrl = url => {
+    const raw = url.match(/^(https?:\/\/[^/]+)\/([^/]+)\/([^/]+)\/raw(?:\/[^/]*)?/i);
+    if (raw) return { baseUrl: raw[1], id: raw[3] };
+    const github = url.match(/^https?:\/\/gist\.github\.com\/([^/]+)\/([a-f0-9]+)/i);
+    if (github) return { baseUrl: "https://api.github.com", id: github[2], github: true };
+    throw new Error("Unsupported Gist URL");
+};
+
+const fetchCloudConfig = async (url, token) => {
+    const match = url.match(/^https?:\/\/gist\.github\.com\/([^/]+)\/([a-f0-9]+)/i);
+    const rawUrl = match ? `https://gist.githubusercontent.com/${match[1]}/${match[2]}/raw` : url;
+    const response = await fetch(rawUrl, token ? { headers: { Authorization: `Token ${token}` } } : undefined);
+    if (!response.ok) throw new Error(`Gist request failed: ${response.status}`);
+    return response.json();
+};
+
+const updateCloudConfig = async (url, token, config) => {
+    const gist = parseGistUrl(url);
+    if (gist.github) throw new Error("GitHub Gist updating is not supported; use an OpenGist URL");
+    const response = await fetch(`${gist.baseUrl}/api/gists/${encodeURIComponent(gist.id)}`, {
+        method: "PATCH",
+        headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            description: `ZCB: Config Change ${new Date().toISOString()}`,
+            files: { "config.json": { content: JSON.stringify(config, null, 2) } },
+        }),
+    });
+    if (!response.ok) throw new Error(`Gist update failed: ${response.status}`);
+};
+
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === "zcb-open-options") {
         api.tabs.create({ url: api.runtime.getURL("options.html") });
         return undefined;
+    }
+    if (message?.type === "zcb-load-cloud-config") {
+        fetchCloudConfig(message.url, message.token)
+            .then(config => sendResponse({ ok: true, config }))
+            .catch(error => sendResponse({ ok: false, error: error.message }));
+        return true;
+    }
+    if (message?.type === "zcb-update-cloud-config") {
+        updateCloudConfig(message.url, message.token, message.config)
+            .then(() => sendResponse({ ok: true }))
+            .catch(error => sendResponse({ ok: false, error: error.message }));
+        return true;
     }
     if (message?.type !== "zcb-load-budget-data") return undefined;
 

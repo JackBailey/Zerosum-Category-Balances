@@ -1,6 +1,9 @@
 const API_BASE_URL = "https://api.zerosumapp.com/api/v1";
 const extensionApi = globalThis.browser ?? globalThis.chrome;
-const STORAGE_KEYS = { groups: "accountGroups", budget: "selectedBudget", defaultGroup: "defaultAccountGroup", assignments: "accountGroupAssignments" };
+const STORAGE_KEYS = { groups: "accountGroups", budget: "selectedBudget", defaultGroup: "defaultAccountGroup", assignments: "accountGroupAssignments", gistUrl: "cloudGistUrl", gistToken: "cloudGistToken" };
+let readOnly = false;
+let cloudConfigLoaded = false;
+let cloudSaveTimer;
 
 const elements = {
     accounts: document.getElementById("accounts"),
@@ -9,11 +12,102 @@ const elements = {
     categories: document.getElementById("categories"),
     createGroup: document.getElementById("create-group"),
     defaultGroup: document.getElementById("default-group"),
+    copyConfig: document.getElementById("copy-config"),
+    gistUrl: document.getElementById("gist-url"),
+    gistToken: document.getElementById("gist-token"),
+    useGist: document.getElementById("use-gist"),
+    configStatus: document.getElementById("config-status"),
 };
 
 let current = { budgetId: null, accounts: [], categories: [], apiAccountGroups: [] };
+const setReadOnly = value => {
+    readOnly = value;
+    elements.createGroup.disabled = value;
+    elements.defaultGroup.disabled = value;
+    elements.budget.disabled = value;
+};
+
+const createUuidV7 = () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    const timestamp = BigInt(Date.now());
+    for (let index = 5; index >= 0; index -= 1) {
+        bytes[index] = Number(timestamp >> BigInt((5 - index) * 8)) & 0xff;
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x70;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+};
+
+const isUuidV7 = value => /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || "");
 
 const mirrorStorage = (key, value) => extensionApi?.storage.local.set({ [key]: value });
+const markCloudDirty = () => {
+    if (!cloudConfigLoaded) return;
+    elements.configStatus.textContent = "Unsaved changes…";
+    clearTimeout(cloudSaveTimer);
+    if (!elements.gistToken.value.trim()) {
+        elements.configStatus.textContent = "Unsaved changes. Add an OpenGist token to save automatically.";
+        return;
+    }
+    cloudSaveTimer = setTimeout(async () => {
+        elements.configStatus.textContent = "Saving…";
+        const result = await extensionApi.runtime.sendMessage({
+            type: "zcb-update-cloud-config",
+            url: elements.gistUrl.value.trim(),
+            token: elements.gistToken.value.trim(),
+            config: getConfig(),
+        });
+        elements.configStatus.textContent = result?.ok
+            ? "Saved to Gist."
+            : `Save failed: ${result?.error || "Unknown error"}`;
+    }, 2000);
+};
+
+const getConfig = () => ({
+    accountGroups: groups.list(),
+    defaultAccountGroup: localStorage.getItem(STORAGE_KEYS.defaultGroup),
+    accountGroupAssignments: JSON.parse(localStorage.getItem(STORAGE_KEYS.assignments) || "{}"),
+});
+
+const gistRawUrl = url => {
+    const match = url.match(/^https?:\/\/gist\.github\.com\/([^/]+)\/([a-f0-9]+)/i);
+    return match ? `https://gist.githubusercontent.com/${match[1]}/${match[2]}/raw` : url;
+};
+
+const applyConfig = config => {
+    const groupIdMap = new Map();
+    const accountGroups = (config.accountGroups ?? []).map(group => {
+        const id = isUuidV7(group.id) ? group.id : createUuidV7();
+        if (id !== group.id) groupIdMap.set(group.id, id);
+        return { ...group, id };
+    });
+    const assignments = JSON.parse(JSON.stringify(config.accountGroupAssignments ?? {}));
+    for (const budget of Object.values(assignments)) {
+        for (const kind of ["accounts", "categories", "categoryGroups"]) {
+            for (const [itemId, groupId] of Object.entries(budget[kind] ?? {})) {
+                if (groupId && groupIdMap.has(groupId)) budget[kind][itemId] = groupIdMap.get(groupId);
+            }
+        }
+    }
+    const defaultGroup = groupIdMap.get(config.defaultAccountGroup) ?? config.defaultAccountGroup;
+    localStorage.setItem(STORAGE_KEYS.groups, JSON.stringify(accountGroups));
+    localStorage.setItem(STORAGE_KEYS.defaultGroup, defaultGroup || "");
+    localStorage.setItem(STORAGE_KEYS.assignments, JSON.stringify(assignments));
+    mirrorStorage("accountGroups", accountGroups);
+    mirrorStorage("defaultAccountGroup", defaultGroup || null);
+    mirrorStorage("accountGroupAssignments", assignments);
+};
+
+const pullGist = async (url, token = "") => {
+    const response = await fetch(gistRawUrl(url), token
+        ? { headers: { Authorization: `Token ${token}` } }
+        : undefined);
+    if (!response.ok) throw new Error(`Gist request failed: ${response.status}`);
+    const config = await response.json();
+    applyConfig(config);
+    return config;
+};
 
 const fetchJson = async path => {
     const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
@@ -94,8 +188,9 @@ const groups = {
     save(value) {
         localStorage.setItem(STORAGE_KEYS.groups, JSON.stringify(value));
         mirrorStorage("accountGroups", value);
+        markCloudDirty();
     },
-    create() { this.save([...this.list(), { id: crypto.randomUUID(), name: "" }]); },
+    create() { this.save([...this.list(), { id: createUuidV7(), name: "" }]); },
     update(group) { this.save(this.list().map(item => item.id === group.id ? group : item)); },
     remove(id) { this.save(this.list().filter(group => group.id !== id)); },
     move(id, offset) {
@@ -123,6 +218,7 @@ const saveAssignment = (kind, itemId, groupId) => {
     all[current.budgetId] = state;
     localStorage.setItem(STORAGE_KEYS.assignments, JSON.stringify(all));
     mirrorStorage("accountGroupAssignments", all);
+    markCloudDirty();
 };
 
 const removeAssignment = (kind, itemId) => {
@@ -133,6 +229,7 @@ const removeAssignment = (kind, itemId) => {
     all[current.budgetId] = state;
     localStorage.setItem(STORAGE_KEYS.assignments, JSON.stringify(all));
     mirrorStorage("accountGroupAssignments", all);
+    markCloudDirty();
 };
 
 const message = (container, text) => {
@@ -157,18 +254,22 @@ const renderGroups = () => {
         label.textContent = "Group name";
         const input = document.createElement("input");
         input.value = group.name;
+        input.readOnly = readOnly;
         input.addEventListener("input", event => groups.update({ ...group, name: event.target.value }));
         const remove = document.createElement("button");
         remove.type = "button";
+        remove.disabled = readOnly;
         remove.textContent = "Remove";
         remove.addEventListener("click", () => { groups.remove(group.id); renderGroups(); renderTables(); });
         const moveUp = document.createElement("button");
         moveUp.type = "button";
+        moveUp.disabled = readOnly;
         moveUp.textContent = "↑";
         moveUp.title = "Move group up";
         moveUp.addEventListener("click", () => { groups.move(group.id, -1); renderGroups(); renderTables(); });
         const moveDown = document.createElement("button");
         moveDown.type = "button";
+        moveDown.disabled = readOnly;
         moveDown.textContent = "↓";
         moveDown.title = "Move group down";
         moveDown.addEventListener("click", () => { groups.move(group.id, 1); renderGroups(); renderTables(); });
@@ -226,6 +327,7 @@ const renderTable = (container, title, rows, kind) => {
                     const cell = document.createElement("td");
                     const checkbox = document.createElement("input");
                     checkbox.type = "checkbox";
+                    checkbox.disabled = readOnly;
                     checkbox.checked = groupAssignment === group.id;
                     checkbox.setAttribute("aria-label", `${row.group.name}: ${group.name || "Unnamed group"}`);
                     checkbox.addEventListener("change", () => {
@@ -259,6 +361,7 @@ const renderTable = (container, title, rows, kind) => {
             const cell = document.createElement("td");
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
+            checkbox.disabled = readOnly;
             const hasAssignment = Object.prototype.hasOwnProperty.call(state[kind], row.id);
             const assignedGroupId = kind === "categories"
                 ? (hasOverride ? state.categories[row.id] : inheritedGroupId)
@@ -335,11 +438,59 @@ elements.defaultGroup.addEventListener("change", event => {
     if (event.target.value) localStorage.setItem(STORAGE_KEYS.defaultGroup, event.target.value);
     else localStorage.removeItem(STORAGE_KEYS.defaultGroup);
     mirrorStorage("defaultAccountGroup", event.target.value || null);
+    markCloudDirty();
     renderTables();
 });
 elements.budget.addEventListener("change", event => loadBudget(event.target.value));
+elements.copyConfig.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(JSON.stringify(getConfig(), null, 2));
+    elements.configStatus.textContent = "Configuration copied. Replace the Gist contents with this JSON.";
+});
+elements.useGist.addEventListener("click", async () => {
+    const url = elements.gistUrl.value.trim();
+    const token = elements.gistToken.value.trim();
+    if (!url) {
+        localStorage.removeItem(STORAGE_KEYS.gistUrl);
+        mirrorStorage("cloudGistUrl", null);
+        mirrorStorage("cloudGistToken", null);
+        setReadOnly(false);
+        elements.configStatus.textContent = "Cloud saving disabled.";
+        return;
+    }
+    try {
+        await pullGist(url, token);
+        localStorage.setItem(STORAGE_KEYS.gistUrl, url);
+        localStorage.setItem(STORAGE_KEYS.gistToken, token);
+        mirrorStorage("cloudGistUrl", url);
+        mirrorStorage("cloudGistToken", token);
+        setReadOnly(false);
+        cloudConfigLoaded = true;
+        renderGroups();
+        renderTables();
+        elements.configStatus.textContent = "Loaded from Gist. Changes are editable locally.";
+    } catch (error) {
+        elements.configStatus.textContent = `Unable to load Gist: ${error.message}`;
+    }
+});
 
 const initialise = async () => {
+    const gistUrl = localStorage.getItem(STORAGE_KEYS.gistUrl) || "";
+    const gistToken = localStorage.getItem(STORAGE_KEYS.gistToken) || "";
+    elements.gistUrl.value = gistUrl;
+    elements.gistToken.value = gistToken;
+    mirrorStorage("cloudGistUrl", gistUrl || null);
+    mirrorStorage("cloudGistToken", gistToken || null);
+    if (gistUrl) {
+        try {
+            await pullGist(gistUrl, gistToken);
+            setReadOnly(false);
+            cloudConfigLoaded = true;
+            elements.configStatus.textContent = "Loaded from Gist. Changes are editable locally.";
+        } catch (error) {
+            elements.configStatus.textContent = `Unable to load Gist: ${error.message}`;
+        }
+    }
+    try { applyConfig(getConfig()); } catch (error) { console.warn("Unable to migrate config IDs", error); }
     renderGroups();
     mirrorStorage("accountGroups", groups.list());
     try {
