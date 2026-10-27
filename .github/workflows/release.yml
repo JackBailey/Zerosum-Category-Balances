@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   release:
@@ -15,26 +17,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create release pull request
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          release-type: simple
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
       - name: Pack extension
+        if: ${{ steps.release.outputs.release_created }}
         uses: cardinalby/webext-buildtools-pack-extension-dir-action@v1
         with:
           extensionDir: src
           zipFilePath: build/extension.zip
 
       - name: Build Chrome release files
+        if: ${{ steps.release.outputs.release_created }}
         uses: cardinalby/webext-buildtools-chrome-crx-action@v2
         with:
           zipFilePath: build/extension.zip
           crxFilePath: build/extension.crx
           privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY }}
-          updateXmlPath: build/update.xml
-          updateXmlCodebaseUrl: https://raw.githubusercontent.com/JackBailey/Zerosum-Category-Balances/refs/heads/main/build/extension.crx
+          updateXmlPath: build/extension.xml
+          updateXmlCodebaseUrl: https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/extension.crx
 
-      - name: Commit release files
-        uses: EndBug/add-and-commit@v10
+      - name: Publish release assets
+        if: ${{ steps.release.outputs.release_created }}
+        uses: softprops/action-gh-release@v2
         with:
-          add: build
-          default_author: github_actions
-          message: "Update release files [skip ci]"
-          push: true
-        
+          tag_name: ${{ steps.release.outputs.tag_name }}
+          files: |
+            build/extension.crx
+            build/extension.xml
