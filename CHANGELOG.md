@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/JackBailey/Zerosum-Category-Balances/compare/v1.1.0...v1.1.1) (2026-10-27)
+
+
+### Bug Fixes
+
+* Rename OpenGist URL to Endpoint ([88e3e5b](https://github.com/JackBailey/Zerosum-Category-Balances/commit/88e3e5b28066c19022f5f6bb2a46b20dd62bfe96))
+
 ## [1.1.0](https://github.com/JackBailey/Zerosum-Category-Balances/compare/v1.0.0...v1.1.0) (2026-10-27)
 
 
