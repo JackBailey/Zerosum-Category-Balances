@@ -24,5 +24,6 @@
         "https://gist.githubusercontent.com/*",
         "https://opengist.io/*",
         "https://paste.jck.cx/*"
-    ]
+    ],
+    "update_url": "https://raw.githubusercontent.com/JackBailey/Zerosum-Category-Balances/refs/heads/main/build/update.xml"
 }
