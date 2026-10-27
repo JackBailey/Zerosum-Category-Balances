@@ -143,7 +143,20 @@ let opengistDetails = new Map();
 const getOpengistBaseUrl = () => {
     const value = elements.opengistUrl.value.trim().replace(/\/$/, "");
     if (!value) throw new Error("Enter an OpenGist URL first");
-    try { return new URL(value).origin; } catch { throw new Error("Enter a valid OpenGist URL"); }
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "https:") throw new Error("OpenGist must use HTTPS");
+        return url.origin;
+    } catch (error) {
+        throw new Error(error.message === "OpenGist must use HTTPS" ? error.message : "Enter a valid OpenGist URL");
+    }
+};
+
+const ensureOpengistHostPermission = async baseUrl => {
+    const origin = `${new URL(baseUrl).origin}/*`;
+    const permissions = { origins: [origin] };
+    if (await extensionApi.permissions.contains(permissions)) return true;
+    return extensionApi.permissions.request(permissions);
 };
 
 const opengistFetch = async (baseUrl, path, token) => {
@@ -190,6 +203,15 @@ const loadOpengistGists = async () => {
     const token = elements.opengistToken.value.trim();
     if (!token) {
         elements.configStatus.textContent = "Enter an OpenGist access token first.";
+        return;
+    }
+    try {
+        if (!await ensureOpengistHostPermission(baseUrl)) {
+            elements.configStatus.textContent = "Permission to access this OpenGist server was denied.";
+            return;
+        }
+    } catch (error) {
+        elements.configStatus.textContent = `Unable to request OpenGist access: ${error.message}`;
         return;
     }
     elements.loadOpengistGists.disabled = true;
@@ -610,6 +632,10 @@ elements.useOpengist.addEventListener("click", async () => {
     }
     const url = opengistRawUrl(baseUrl, gist, fileName);
     try {
+        if (!await ensureOpengistHostPermission(baseUrl)) {
+            elements.configStatus.textContent = "Permission to access this OpenGist server was denied.";
+            return;
+        }
         await pullGist(url, token);
         setCloudStorage({ mode: "opengist", url, token, gistId: gist.id, fileName, baseUrl });
         setReadOnly(false);

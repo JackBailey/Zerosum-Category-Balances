@@ -1,12 +1,12 @@
 {
     "name": "Zerosum Category Balances",
-    "description": "Tie categories to accounts, to make the most of savings and keep a couple's money to ",
+    "description": "Tie categories to accounts in Zerosum",
     "version": "1.0",
     "manifest_version": 3,
     "background": {
         "service_worker": "background.js"
     },
-    "permissions": ["storage", "activeTab", "scripting", "tabs"],
+    "permissions": ["storage", "tabs"],
     "content_scripts": [
         {
             "js": ["content.js"],
@@ -20,10 +20,9 @@
     "host_permissions": [
         "https://my.zerosumapp.com/budget/*",
         "https://api.zerosumapp.com/*",
-        "https://gist.github.com/*",
-        "https://gist.githubusercontent.com/*",
-        "https://opengist.io/*",
-        "https://paste.jck.cx/*"
+    ],
+    "optional_host_permissions": [
+        "https://*/"
     ],
     "update_url": "https://raw.githubusercontent.com/JackBailey/Zerosum-Category-Balances/refs/heads/main/build/update.xml"
 }
