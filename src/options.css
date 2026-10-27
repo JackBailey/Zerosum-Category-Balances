@@ -34,6 +34,31 @@ section {
     margin-bottom: 0;
 }
 
+.config-section fieldset {
+    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+    border-radius: 6px;
+    display: grid;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 12px;
+}
+
+.config-section fieldset label {
+    display: grid;
+    gap: 4px;
+}
+
+.config-section fieldset input,
+.config-section fieldset select {
+    min-width: 0;
+}
+
+.help-text {
+    color: var(--muted-foreground, currentColor);
+    font-size: 12px;
+    margin: 0;
+}
+
 #config-status {
     color: var(--muted-foreground, currentColor);
     margin: 0;

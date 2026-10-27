@@ -505,7 +505,8 @@ const addPopupStyles = () => {
             margin: 0;
         }
         .category-balances-error {
-            color: var(--destructive, #c0392b);
+            color: var(--muted-foreground);
+            font-size: var(--text-sm);
         }
     `;
     (document.head || document.documentElement)?.append(style);

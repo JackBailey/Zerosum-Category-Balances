@@ -1,6 +1,6 @@
 const API_BASE_URL = "https://api.zerosumapp.com/api/v1";
 const extensionApi = globalThis.browser ?? globalThis.chrome;
-const STORAGE_KEYS = { groups: "accountGroups", budget: "selectedBudget", defaultGroup: "defaultAccountGroup", assignments: "accountGroupAssignments", gistUrl: "cloudGistUrl", gistToken: "cloudGistToken" };
+const STORAGE_KEYS = { groups: "accountGroups", budget: "selectedBudget", defaultGroup: "defaultAccountGroup", assignments: "accountGroupAssignments", gistUrl: "cloudGistUrl", gistToken: "cloudGistToken", gistMode: "cloudGistMode", gistId: "cloudGistId", gistFile: "cloudGistFile", gistBaseUrl: "cloudGistBaseUrl" };
 let readOnly = false;
 let cloudConfigLoaded = false;
 let cloudSaveTimer;
@@ -13,9 +13,14 @@ const elements = {
     createGroup: document.getElementById("create-group"),
     defaultGroup: document.getElementById("default-group"),
     copyConfig: document.getElementById("copy-config"),
-    gistUrl: document.getElementById("gist-url"),
-    gistToken: document.getElementById("gist-token"),
-    useGist: document.getElementById("use-gist"),
+    gistRawUrl: document.getElementById("gist-raw-url"),
+    loadRawGist: document.getElementById("load-raw-gist"),
+    opengistUrl: document.getElementById("opengist-url"),
+    opengistToken: document.getElementById("opengist-token"),
+    loadOpengistGists: document.getElementById("load-opengist-gists"),
+    opengistGist: document.getElementById("opengist-gist"),
+    opengistFile: document.getElementById("opengist-file"),
+    useOpengist: document.getElementById("use-opengist"),
     configStatus: document.getElementById("config-status"),
 };
 
@@ -46,7 +51,12 @@ const markCloudDirty = () => {
     if (!cloudConfigLoaded) return;
     elements.configStatus.textContent = "Unsaved changes…";
     clearTimeout(cloudSaveTimer);
-    if (!elements.gistToken.value.trim()) {
+    if (localStorage.getItem(STORAGE_KEYS.gistMode) !== "opengist") {
+        elements.configStatus.textContent = "Unsaved changes. Copy JSON to update the raw Gist.";
+        return;
+    }
+    const token = localStorage.getItem(STORAGE_KEYS.gistToken) || "";
+    if (!token) {
         elements.configStatus.textContent = "Unsaved changes. Add an OpenGist token to save automatically.";
         return;
     }
@@ -54,14 +64,32 @@ const markCloudDirty = () => {
         elements.configStatus.textContent = "Saving…";
         const result = await extensionApi.runtime.sendMessage({
             type: "zcb-update-cloud-config",
-            url: elements.gistUrl.value.trim(),
-            token: elements.gistToken.value.trim(),
+            url: localStorage.getItem(STORAGE_KEYS.gistUrl) || "",
+            token,
+            gistId: localStorage.getItem(STORAGE_KEYS.gistId) || "",
+            fileName: localStorage.getItem(STORAGE_KEYS.gistFile) || "config.json",
             config: getConfig(),
         });
         elements.configStatus.textContent = result?.ok
             ? "Saved to Gist."
             : `Save failed: ${result?.error || "Unknown error"}`;
     }, 2000);
+};
+
+const setCloudStorage = ({ mode, url, token, gistId = "", fileName = "", baseUrl = "" }) => {
+    const values = {
+        [STORAGE_KEYS.gistMode]: mode,
+        [STORAGE_KEYS.gistUrl]: url,
+        [STORAGE_KEYS.gistToken]: token,
+        [STORAGE_KEYS.gistId]: gistId,
+        [STORAGE_KEYS.gistFile]: fileName,
+        [STORAGE_KEYS.gistBaseUrl]: baseUrl,
+    };
+    for (const [key, value] of Object.entries(values)) {
+        if (value) localStorage.setItem(key, value);
+        else localStorage.removeItem(key);
+        mirrorStorage(key, value || null);
+    }
 };
 
 const getConfig = () => ({
@@ -107,6 +135,90 @@ const pullGist = async (url, token = "") => {
     const config = await response.json();
     applyConfig(config);
     return config;
+};
+
+let opengistGists = [];
+let opengistDetails = new Map();
+
+const getOpengistBaseUrl = () => {
+    const value = elements.opengistUrl.value.trim().replace(/\/$/, "");
+    if (!value) throw new Error("Enter an OpenGist URL first");
+    try { return new URL(value).origin; } catch { throw new Error("Enter a valid OpenGist URL"); }
+};
+
+const opengistFetch = async (baseUrl, path, token) => {
+    const response = await fetch(`${baseUrl}/api${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error(`OpenGist request failed: ${response.status} ${response.statusText}`);
+    return response.json();
+};
+
+const opengistRawUrl = (baseUrl, gist, fileName) => {
+    const owner = gist.owner?.username || gist.owner?.login;
+    if (!owner || !gist.id) throw new Error("Selected OpenGist is missing its owner or ID");
+    return `${baseUrl}/${encodeURIComponent(owner)}/${encodeURIComponent(gist.id)}/raw/HEAD/${encodeURIComponent(fileName)}`;
+};
+
+const renderOpengistFiles = () => {
+    const gist = opengistDetails.get(elements.opengistGist.value);
+    elements.opengistFile.replaceChildren();
+    if (!gist) {
+        elements.opengistFile.disabled = true;
+        elements.opengistFile.append(new Option("Select a Gist first", ""));
+        elements.useOpengist.disabled = true;
+        return;
+    }
+    const files = Object.values(gist.files ?? {});
+    if (!files.length) {
+        elements.opengistFile.disabled = true;
+        elements.opengistFile.append(new Option("No files found", ""));
+        elements.useOpengist.disabled = true;
+        return;
+    }
+    elements.opengistFile.disabled = false;
+    for (const file of files) elements.opengistFile.append(new Option(file.filename || file.name, file.filename || file.name));
+    elements.useOpengist.disabled = false;
+};
+
+const loadOpengistGists = async () => {
+    let baseUrl;
+    try { baseUrl = getOpengistBaseUrl(); } catch (error) {
+        elements.configStatus.textContent = error.message;
+        return;
+    }
+    const token = elements.opengistToken.value.trim();
+    if (!token) {
+        elements.configStatus.textContent = "Enter an OpenGist access token first.";
+        return;
+    }
+    elements.loadOpengistGists.disabled = true;
+    elements.configStatus.textContent = "Loading OpenGist gists…";
+    try {
+        opengistGists = await opengistFetch(baseUrl, "/gists?per_page=100", token);
+        opengistDetails = new Map();
+        elements.opengistGist.replaceChildren();
+        if (!opengistGists.length) {
+            elements.opengistGist.append(new Option("No gists found", ""));
+            elements.opengistGist.disabled = true;
+            renderOpengistFiles();
+        } else {
+            elements.opengistGist.disabled = false;
+            for (const gist of opengistGists) {
+                const label = gist.title || gist.description || gist.slug_url || gist.id;
+                elements.opengistGist.append(new Option(label, gist.id));
+            }
+            elements.opengistGist.value = opengistGists[0].id;
+            const detail = await opengistFetch(baseUrl, `/gists/${encodeURIComponent(elements.opengistGist.value)}`, token);
+            opengistDetails.set(detail.id, detail);
+            renderOpengistFiles();
+        }
+        elements.configStatus.textContent = "Select an OpenGist file to use.";
+    } catch (error) {
+        elements.configStatus.textContent = `Unable to load OpenGist: ${error.message}`;
+    } finally {
+        elements.loadOpengistGists.disabled = false;
+    }
 };
 
 const fetchJson = async path => {
@@ -446,46 +558,94 @@ elements.copyConfig.addEventListener("click", async () => {
     await navigator.clipboard.writeText(JSON.stringify(getConfig(), null, 2));
     elements.configStatus.textContent = "Configuration copied. Replace the Gist contents with this JSON.";
 });
-elements.useGist.addEventListener("click", async () => {
-    const url = elements.gistUrl.value.trim();
-    const token = elements.gistToken.value.trim();
+elements.loadRawGist.addEventListener("click", async () => {
+    const url = elements.gistRawUrl.value.trim();
     if (!url) {
-        localStorage.removeItem(STORAGE_KEYS.gistUrl);
-        mirrorStorage("cloudGistUrl", null);
-        mirrorStorage("cloudGistToken", null);
-        setReadOnly(false);
-        elements.configStatus.textContent = "Cloud saving disabled.";
+        elements.configStatus.textContent = "Enter a Gist Raw URL first.";
         return;
     }
     try {
-        await pullGist(url, token);
-        localStorage.setItem(STORAGE_KEYS.gistUrl, url);
-        localStorage.setItem(STORAGE_KEYS.gistToken, token);
-        mirrorStorage("cloudGistUrl", url);
-        mirrorStorage("cloudGistToken", token);
+        await pullGist(url);
+        setCloudStorage({ mode: "raw", url, token: "" });
         setReadOnly(false);
         cloudConfigLoaded = true;
         renderGroups();
         renderTables();
-        elements.configStatus.textContent = "Loaded from Gist. Changes are editable locally.";
+        elements.configStatus.textContent = "Loaded from raw Gist. Copy JSON to save changes manually.";
     } catch (error) {
-        elements.configStatus.textContent = `Unable to load Gist: ${error.message}`;
+        elements.configStatus.textContent = `Unable to load raw Gist: ${error.message}`;
+    }
+});
+
+elements.loadOpengistGists.addEventListener("click", loadOpengistGists);
+elements.opengistGist.addEventListener("change", async () => {
+    let baseUrl;
+    try { baseUrl = getOpengistBaseUrl(); } catch (error) {
+        elements.configStatus.textContent = error.message;
+        return;
+    }
+    const token = elements.opengistToken.value.trim();
+    if (!token || !elements.opengistGist.value) return;
+    try {
+        const detail = await opengistFetch(baseUrl, `/gists/${encodeURIComponent(elements.opengistGist.value)}`, token);
+        opengistDetails.set(detail.id, detail);
+        renderOpengistFiles();
+    } catch (error) {
+        elements.configStatus.textContent = `Unable to load Gist files: ${error.message}`;
+    }
+});
+
+elements.useOpengist.addEventListener("click", async () => {
+    let baseUrl;
+    try { baseUrl = getOpengistBaseUrl(); } catch (error) {
+        elements.configStatus.textContent = error.message;
+        return;
+    }
+    const token = elements.opengistToken.value.trim();
+    const gist = opengistDetails.get(elements.opengistGist.value);
+    const fileName = elements.opengistFile.value;
+    if (!token || !gist || !fileName) {
+        elements.configStatus.textContent = "Select a Gist and file first.";
+        return;
+    }
+    const url = opengistRawUrl(baseUrl, gist, fileName);
+    try {
+        await pullGist(url, token);
+        setCloudStorage({ mode: "opengist", url, token, gistId: gist.id, fileName, baseUrl });
+        setReadOnly(false);
+        cloudConfigLoaded = true;
+        renderGroups();
+        renderTables();
+        elements.configStatus.textContent = "Loaded from OpenGist. Changes will save automatically.";
+    } catch (error) {
+        elements.configStatus.textContent = `Unable to load OpenGist file: ${error.message}`;
     }
 });
 
 const initialise = async () => {
     const gistUrl = localStorage.getItem(STORAGE_KEYS.gistUrl) || "";
     const gistToken = localStorage.getItem(STORAGE_KEYS.gistToken) || "";
-    elements.gistUrl.value = gistUrl;
-    elements.gistToken.value = gistToken;
-    mirrorStorage("cloudGistUrl", gistUrl || null);
-    mirrorStorage("cloudGistToken", gistToken || null);
+    const gistBaseUrl = localStorage.getItem(STORAGE_KEYS.gistBaseUrl) || "";
+    const gistMode = localStorage.getItem(STORAGE_KEYS.gistMode) || (gistToken ? "opengist" : "raw");
+    if (gistMode === "raw") elements.gistRawUrl.value = gistUrl;
+    if (gistMode === "opengist") {
+        elements.opengistUrl.value = gistBaseUrl;
+        elements.opengistToken.value = gistToken;
+    }
+    mirrorStorage(STORAGE_KEYS.gistUrl, gistUrl || null);
+    mirrorStorage(STORAGE_KEYS.gistToken, gistToken || null);
+    mirrorStorage(STORAGE_KEYS.gistMode, gistMode);
+    mirrorStorage(STORAGE_KEYS.gistId, localStorage.getItem(STORAGE_KEYS.gistId) || null);
+    mirrorStorage(STORAGE_KEYS.gistFile, localStorage.getItem(STORAGE_KEYS.gistFile) || null);
+    mirrorStorage(STORAGE_KEYS.gistBaseUrl, gistBaseUrl || null);
     if (gistUrl) {
         try {
             await pullGist(gistUrl, gistToken);
             setReadOnly(false);
             cloudConfigLoaded = true;
-            elements.configStatus.textContent = "Loaded from Gist. Changes are editable locally.";
+            elements.configStatus.textContent = gistMode === "opengist"
+                ? "Loaded from OpenGist. Changes will save automatically."
+                : "Loaded from raw Gist. Copy JSON to save changes manually.";
         } catch (error) {
             elements.configStatus.textContent = `Unable to load Gist: ${error.message}`;
         }

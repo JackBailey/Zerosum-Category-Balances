@@ -17,11 +17,34 @@
         <section class="config-section">
             <h2>Configuration</h2>
             <button id="copy-config" type="button">Copy JSON</button>
-            <label for="gist-url">Cloud saving (Gist URL)</label>
-            <input id="gist-url" type="url" placeholder="https://gist.github.com/..." />
-            <label for="gist-token">OpenGist access token</label>
-            <input id="gist-token" type="password" placeholder="og_..." autocomplete="off" />
-            <button id="use-gist" type="button">Use Gist</button>
+
+            <fieldset>
+                <legend>Gist Raw URL</legend>
+                <label for="gist-raw-url">Raw URL</label>
+                <input id="gist-raw-url" type="url" placeholder="https://gist.githubusercontent.com/.../raw/..." />
+                <button id="load-raw-gist" type="button">Load raw Gist</button>
+                <p class="help-text">Read-only. Changes are not saved automatically; use Copy JSON to update the Gist manually.</p>
+            </fieldset>
+
+            <fieldset>
+                <legend>OpenGist</legend>
+                <label for="opengist-url">OpenGist URL</label>
+                <input id="opengist-url" type="url" placeholder="https://opengist.io" required />
+                <label for="opengist-token">Access token</label>
+                <input id="opengist-token" type="password" placeholder="og_..." autocomplete="off" />
+                <button id="load-opengist-gists" type="button">Load gists</button>
+                <label for="opengist-gist">Gist</label>
+                <select id="opengist-gist" disabled>
+                    <option value="">Load gists first</option>
+                </select>
+                <label for="opengist-file">File</label>
+                <select id="opengist-file" disabled>
+                    <option value="">Select a Gist first</option>
+                </select>
+                <button id="use-opengist" type="button" disabled>Use selected file</button>
+                <p class="help-text">Changes are saved automatically to the selected OpenGist file.</p>
+            </fieldset>
+
             <p id="config-status" role="status"></p>
         </section>
 

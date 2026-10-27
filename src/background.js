@@ -23,10 +23,10 @@ const fetchCloudConfig = async (url, token) => {
     return response.json();
 };
 
-const updateCloudConfig = async (url, token, config) => {
+const updateCloudConfig = async (url, token, config, gistId, fileName = "config.json") => {
     const gist = parseGistUrl(url);
-    if (gist.github) throw new Error("GitHub Gist updating is not supported; use an OpenGist URL");
-    const response = await fetch(`${gist.baseUrl}/api/gists/${encodeURIComponent(gist.id)}`, {
+    if (gist.github || !gistId) throw new Error("OpenGist gist details are required for saving");
+    const response = await fetch(`${gist.baseUrl}/api/gists/${encodeURIComponent(gistId)}`, {
         method: "PATCH",
         headers: {
             Authorization: `Bearer ${token}`,
@@ -34,7 +34,7 @@ const updateCloudConfig = async (url, token, config) => {
         },
         body: JSON.stringify({
             description: `ZCB: Config Change ${new Date().toISOString()}`,
-            files: { "config.json": { content: JSON.stringify(config, null, 2) } },
+            files: { [fileName]: { content: JSON.stringify(config, null, 2) } },
         }),
     });
     if (!response.ok) throw new Error(`Gist update failed: ${response.status}`);
@@ -52,7 +52,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
     if (message?.type === "zcb-update-cloud-config") {
-        updateCloudConfig(message.url, message.token, message.config)
+        updateCloudConfig(message.url, message.token, message.config, message.gistId, message.fileName)
             .then(() => sendResponse({ ok: true }))
             .catch(error => sendResponse({ ok: false, error: error.message }));
         return true;
