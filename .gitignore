@@ -1,3 +1,5 @@
 **/.DS_Store
 src.pem
 src.crx
+
+node_modules
