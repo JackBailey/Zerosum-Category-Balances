@@ -130,23 +130,43 @@ const normaliseLiveData = (accountsPayload, metaPayload, budgetPayload) => {
 
     const budgetRoot = findCompactBudget(budgetPayload);
     const compact = budgetRoot?.budgetsByMonthCompact;
-    const monthKeys = compact?.months ?? Object.keys(compact?.cells ?? {});
-    const latestMonth =
-        budgetRoot?.currentMonth ?? monthKeys[monthKeys.length - 1];
-    const monthCells = compact?.cells?.[latestMonth] ?? {};
-    const assignedById = new Map(
+    const cells = compact?.cells ?? {};
+    const monthKeys = Object.keys(cells);
+    const currentMonth = String(
+        budgetRoot?.currentMonth ?? new Date().toISOString(),
+    ).slice(0, 7);
+    const baseMonth = monthKeys
+        .filter((month) => month.slice(0, 7) <= currentMonth)
+        .sort()
+        .at(-1);
+    const monthCells = cells[baseMonth] ?? {};
+    const balancesById = new Map(
         Object.entries(monthCells).map(([categoryId, values]) => [
             categoryId,
-            values?.available ??
-                (values?.assigned ?? 0) + (values?.activity ?? 0),
+            Number(
+                values?.available ??
+                    Number(values?.assigned ?? values?.budgeted ?? 0) +
+                        Number(values?.activity ?? 0),
+            ),
         ]),
     );
+    for (const month of monthKeys) {
+        if (month.slice(0, 7) <= currentMonth) continue;
+        for (const [categoryId, values] of Object.entries(cells[month] ?? {})) {
+            const budgeted = Number(values?.assigned ?? values?.budgeted ?? 0);
+            balancesById.set(
+                categoryId,
+                (balancesById.get(categoryId) ?? 0) + budgeted,
+            );
+        }
+    }
     for (const category of categories) {
-        if (assignedById.has(category.id))
-            category.balance = assignedById.get(category.id);
+        if (balancesById.has(category.id))
+            category.balance = balancesById.get(category.id);
     }
     return { accounts, categories };
 };
+
 const createTransfer = async (
     transfer,
     sourceAccountId,
