@@ -3,7 +3,7 @@
     "version": "1.1.1",
     "private": true,
     "scripts": {
-        "format": "biome format"
+        "format": "biome format --fix"
     },
     "devDependencies": {
         "@biomejs/biome": "2.6.4"

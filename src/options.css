@@ -1,10 +1,14 @@
 body {
-    font: 14px system-ui, sans-serif;
+    font:
+        14px system-ui,
+        sans-serif;
     margin: 24px;
     max-width: 1100px;
 }
 
-button, select, input {
+button,
+select,
+input {
     font: inherit;
 }
 

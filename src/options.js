@@ -1,6 +1,17 @@
 const API_BASE_URL = "https://api.zerosumapp.com/api/v1";
 const extensionApi = globalThis.browser ?? globalThis.chrome;
-const STORAGE_KEYS = { groups: "accountGroups", budget: "selectedBudget", defaultGroup: "defaultAccountGroup", assignments: "accountGroupAssignments", gistUrl: "cloudGistUrl", gistToken: "cloudGistToken", gistMode: "cloudGistMode", gistId: "cloudGistId", gistFile: "cloudGistFile", gistBaseUrl: "cloudGistBaseUrl" };
+const STORAGE_KEYS = {
+    groups: "accountGroups",
+    budget: "selectedBudget",
+    defaultGroup: "defaultAccountGroup",
+    assignments: "accountGroupAssignments",
+    gistUrl: "cloudGistUrl",
+    gistToken: "cloudGistToken",
+    gistMode: "cloudGistMode",
+    gistId: "cloudGistId",
+    gistFile: "cloudGistFile",
+    gistBaseUrl: "cloudGistBaseUrl",
+};
 let readOnly = false;
 let cloudConfigLoaded = false;
 let cloudSaveTimer;
@@ -24,8 +35,13 @@ const elements = {
     configStatus: document.getElementById("config-status"),
 };
 
-let current = { budgetId: null, accounts: [], categories: [], apiAccountGroups: [] };
-const setReadOnly = value => {
+let current = {
+    budgetId: null,
+    accounts: [],
+    categories: [],
+    apiAccountGroups: [],
+};
+const setReadOnly = (value) => {
     readOnly = value;
     elements.createGroup.disabled = value;
     elements.defaultGroup.disabled = value;
@@ -40,24 +56,32 @@ const createUuidV7 = () => {
     }
     bytes[6] = (bytes[6] & 0x0f) | 0x70;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    const hex = [...bytes]
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
-const isUuidV7 = value => /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value || "");
+const isUuidV7 = (value) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value || "",
+    );
 
-const mirrorStorage = (key, value) => extensionApi?.storage.local.set({ [key]: value });
+const mirrorStorage = (key, value) =>
+    extensionApi?.storage.local.set({ [key]: value });
 const markCloudDirty = () => {
     if (!cloudConfigLoaded) return;
     elements.configStatus.textContent = "Unsaved changes…";
     clearTimeout(cloudSaveTimer);
     if (localStorage.getItem(STORAGE_KEYS.gistMode) !== "opengist") {
-        elements.configStatus.textContent = "Unsaved changes. Copy JSON to update the raw Gist.";
+        elements.configStatus.textContent =
+            "Unsaved changes. Copy JSON to update the raw Gist.";
         return;
     }
     const token = localStorage.getItem(STORAGE_KEYS.gistToken) || "";
     if (!token) {
-        elements.configStatus.textContent = "Unsaved changes. Add an OpenGist token to save automatically.";
+        elements.configStatus.textContent =
+            "Unsaved changes. Add an OpenGist token to save automatically.";
         return;
     }
     cloudSaveTimer = setTimeout(async () => {
@@ -67,7 +91,8 @@ const markCloudDirty = () => {
             url: localStorage.getItem(STORAGE_KEYS.gistUrl) || "",
             token,
             gistId: localStorage.getItem(STORAGE_KEYS.gistId) || "",
-            fileName: localStorage.getItem(STORAGE_KEYS.gistFile) || "config.json",
+            fileName:
+                localStorage.getItem(STORAGE_KEYS.gistFile) || "config.json",
             config: getConfig(),
         });
         elements.configStatus.textContent = result?.ok
@@ -76,7 +101,14 @@ const markCloudDirty = () => {
     }, 2000);
 };
 
-const setCloudStorage = ({ mode, url, token, gistId = "", fileName = "", baseUrl = "" }) => {
+const setCloudStorage = ({
+    mode,
+    url,
+    token,
+    gistId = "",
+    fileName = "",
+    baseUrl = "",
+}) => {
     const values = {
         [STORAGE_KEYS.gistMode]: mode,
         [STORAGE_KEYS.gistUrl]: url,
@@ -95,30 +127,43 @@ const setCloudStorage = ({ mode, url, token, gistId = "", fileName = "", baseUrl
 const getConfig = () => ({
     accountGroups: groups.list(),
     defaultAccountGroup: localStorage.getItem(STORAGE_KEYS.defaultGroup),
-    accountGroupAssignments: JSON.parse(localStorage.getItem(STORAGE_KEYS.assignments) || "{}"),
+    accountGroupAssignments: JSON.parse(
+        localStorage.getItem(STORAGE_KEYS.assignments) || "{}",
+    ),
 });
 
-const gistRawUrl = url => {
-    const match = url.match(/^https?:\/\/gist\.github\.com\/([^/]+)\/([a-f0-9]+)/i);
-    return match ? `https://gist.githubusercontent.com/${match[1]}/${match[2]}/raw` : url;
+const gistRawUrl = (url) => {
+    const match = url.match(
+        /^https?:\/\/gist\.github\.com\/([^/]+)\/([a-f0-9]+)/i,
+    );
+    return match
+        ? `https://gist.githubusercontent.com/${match[1]}/${match[2]}/raw`
+        : url;
 };
 
-const applyConfig = config => {
+const applyConfig = (config) => {
     const groupIdMap = new Map();
-    const accountGroups = (config.accountGroups ?? []).map(group => {
+    const accountGroups = (config.accountGroups ?? []).map((group) => {
         const id = isUuidV7(group.id) ? group.id : createUuidV7();
         if (id !== group.id) groupIdMap.set(group.id, id);
         return { ...group, id };
     });
-    const assignments = JSON.parse(JSON.stringify(config.accountGroupAssignments ?? {}));
+    const assignments = JSON.parse(
+        JSON.stringify(config.accountGroupAssignments ?? {}),
+    );
     for (const budget of Object.values(assignments)) {
         for (const kind of ["accounts", "categories", "categoryGroups"]) {
-            for (const [itemId, groupId] of Object.entries(budget[kind] ?? {})) {
-                if (groupId && groupIdMap.has(groupId)) budget[kind][itemId] = groupIdMap.get(groupId);
+            for (const [itemId, groupId] of Object.entries(
+                budget[kind] ?? {},
+            )) {
+                if (groupId && groupIdMap.has(groupId))
+                    budget[kind][itemId] = groupIdMap.get(groupId);
             }
         }
     }
-    const defaultGroup = groupIdMap.get(config.defaultAccountGroup) ?? config.defaultAccountGroup;
+    const defaultGroup =
+        groupIdMap.get(config.defaultAccountGroup) ??
+        config.defaultAccountGroup;
     localStorage.setItem(STORAGE_KEYS.groups, JSON.stringify(accountGroups));
     localStorage.setItem(STORAGE_KEYS.defaultGroup, defaultGroup || "");
     localStorage.setItem(STORAGE_KEYS.assignments, JSON.stringify(assignments));
@@ -128,10 +173,12 @@ const applyConfig = config => {
 };
 
 const pullGist = async (url, token = "") => {
-    const response = await fetch(gistRawUrl(url), token
-        ? { headers: { Authorization: `Token ${token}` } }
-        : undefined);
-    if (!response.ok) throw new Error(`Gist request failed: ${response.status}`);
+    const response = await fetch(
+        gistRawUrl(url),
+        token ? { headers: { Authorization: `Token ${token}` } } : undefined,
+    );
+    if (!response.ok)
+        throw new Error(`Gist request failed: ${response.status}`);
     const config = await response.json();
     applyConfig(config);
     return config;
@@ -145,14 +192,19 @@ const getOpengistBaseUrl = () => {
     if (!value) throw new Error("Enter an OpenGist URL first");
     try {
         const url = new URL(value);
-        if (url.protocol !== "https:") throw new Error("OpenGist must use HTTPS");
+        if (url.protocol !== "https:")
+            throw new Error("OpenGist must use HTTPS");
         return url.origin;
     } catch (error) {
-        throw new Error(error.message === "OpenGist must use HTTPS" ? error.message : "Enter a valid OpenGist URL");
+        throw new Error(
+            error.message === "OpenGist must use HTTPS"
+                ? error.message
+                : "Enter a valid OpenGist URL",
+        );
     }
 };
 
-const ensureOpengistHostPermission = async baseUrl => {
+const ensureOpengistHostPermission = async (baseUrl) => {
     const origin = `${new URL(baseUrl).origin}/*`;
     const permissions = { origins: [origin] };
     if (await extensionApi.permissions.contains(permissions)) return true;
@@ -163,13 +215,17 @@ const opengistFetch = async (baseUrl, path, token) => {
     const response = await fetch(`${baseUrl}/api${path}`, {
         headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok) throw new Error(`OpenGist request failed: ${response.status} ${response.statusText}`);
+    if (!response.ok)
+        throw new Error(
+            `OpenGist request failed: ${response.status} ${response.statusText}`,
+        );
     return response.json();
 };
 
 const opengistRawUrl = (baseUrl, gist, fileName) => {
     const owner = gist.owner?.username || gist.owner?.login;
-    if (!owner || !gist.id) throw new Error("Selected OpenGist is missing its owner or ID");
+    if (!owner || !gist.id)
+        throw new Error("Selected OpenGist is missing its owner or ID");
     return `${baseUrl}/${encodeURIComponent(owner)}/${encodeURIComponent(gist.id)}/raw/HEAD/${encodeURIComponent(fileName)}`;
 };
 
@@ -190,24 +246,31 @@ const renderOpengistFiles = () => {
         return;
     }
     elements.opengistFile.disabled = false;
-    for (const file of files) elements.opengistFile.append(new Option(file.filename || file.name, file.filename || file.name));
+    for (const file of files)
+        elements.opengistFile.append(
+            new Option(file.filename || file.name, file.filename || file.name),
+        );
     elements.useOpengist.disabled = false;
 };
 
 const loadOpengistGists = async () => {
     let baseUrl;
-    try { baseUrl = getOpengistBaseUrl(); } catch (error) {
+    try {
+        baseUrl = getOpengistBaseUrl();
+    } catch (error) {
         elements.configStatus.textContent = error.message;
         return;
     }
     const token = elements.opengistToken.value.trim();
     if (!token) {
-        elements.configStatus.textContent = "Enter an OpenGist access token first.";
+        elements.configStatus.textContent =
+            "Enter an OpenGist access token first.";
         return;
     }
     try {
-        if (!await ensureOpengistHostPermission(baseUrl)) {
-            elements.configStatus.textContent = "Permission to access this OpenGist server was denied.";
+        if (!(await ensureOpengistHostPermission(baseUrl))) {
+            elements.configStatus.textContent =
+                "Permission to access this OpenGist server was denied.";
             return;
         }
     } catch (error) {
@@ -217,7 +280,11 @@ const loadOpengistGists = async () => {
     elements.loadOpengistGists.disabled = true;
     elements.configStatus.textContent = "Loading OpenGist gists…";
     try {
-        opengistGists = await opengistFetch(baseUrl, "/gists?per_page=100", token);
+        opengistGists = await opengistFetch(
+            baseUrl,
+            "/gists?per_page=100",
+            token,
+        );
         opengistDetails = new Map();
         elements.opengistGist.replaceChildren();
         if (!opengistGists.length) {
@@ -227,11 +294,16 @@ const loadOpengistGists = async () => {
         } else {
             elements.opengistGist.disabled = false;
             for (const gist of opengistGists) {
-                const label = gist.title || gist.description || gist.slug_url || gist.id;
+                const label =
+                    gist.title || gist.description || gist.slug_url || gist.id;
                 elements.opengistGist.append(new Option(label, gist.id));
             }
             elements.opengistGist.value = opengistGists[0].id;
-            const detail = await opengistFetch(baseUrl, `/gists/${encodeURIComponent(elements.opengistGist.value)}`, token);
+            const detail = await opengistFetch(
+                baseUrl,
+                `/gists/${encodeURIComponent(elements.opengistGist.value)}`,
+                token,
+            );
             opengistDetails.set(detail.id, detail);
             renderOpengistFiles();
         }
@@ -243,9 +315,14 @@ const loadOpengistGists = async () => {
     }
 };
 
-const fetchJson = async path => {
-    const response = await fetch(`${API_BASE_URL}${path}`, { credentials: "include" });
-    if (!response.ok) throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+const fetchJson = async (path) => {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+        credentials: "include",
+    });
+    if (!response.ok)
+        throw new Error(
+            `Request failed: ${response.status} ${response.statusText}`,
+        );
     return response.json();
 };
 
@@ -262,11 +339,15 @@ const findArray = (payload, names) => {
     return null;
 };
 
-const ZSBudgets = { list: async () => findArray(await fetchJson("/budgets"), ["budgets"]) ?? [] };
+const ZSBudgets = {
+    list: async () => findArray(await fetchJson("/budgets"), ["budgets"]) ?? [],
+};
 
 const ZSAccounts = {
-    list: async budgetId => {
-        const payload = await fetchJson(`/budgets/${encodeURIComponent(budgetId)}/accounts`);
+    list: async (budgetId) => {
+        const payload = await fetchJson(
+            `/budgets/${encodeURIComponent(budgetId)}/accounts`,
+        );
         return {
             bankAccounts: findArray(payload, ["bankAccounts"]) ?? [],
             loanAccounts: findArray(payload, ["loanAccounts"]) ?? [],
@@ -275,40 +356,61 @@ const ZSAccounts = {
 };
 
 const ZSAccountGroups = {
-    list: async budgetId => {
-        const payload = await fetchJson(`/budgets/${encodeURIComponent(budgetId)}/account-groups`);
-        return Array.isArray(payload) ? payload : findArray(payload, ["accountGroups"]) ?? [];
+    list: async (budgetId) => {
+        const payload = await fetchJson(
+            `/budgets/${encodeURIComponent(budgetId)}/account-groups`,
+        );
+        return Array.isArray(payload)
+            ? payload
+            : (findArray(payload, ["accountGroups"]) ?? []);
     },
 };
 
 const ZSCategories = {
-    list: async budgetId => {
-        const payload = await fetchJson(`/budgets/${encodeURIComponent(budgetId)}/meta`);
+    list: async (budgetId) => {
+        const payload = await fetchJson(
+            `/budgets/${encodeURIComponent(budgetId)}/meta`,
+        );
         const categories = findArray(payload, ["categories"]) ?? [];
-        const categoryGroups = (findArray(payload, ["categoryGroups"]) ?? [])
-            .filter(group => group.isHidden === false && group.systemType !== "CREDIT_CARD_PAYMENTS");
-        const groupsById = new Map(categoryGroups.map(group => [group.id, group]));
+        const categoryGroups = (
+            findArray(payload, ["categoryGroups"]) ?? []
+        ).filter(
+            (group) =>
+                group.isHidden === false &&
+                group.systemType !== "CREDIT_CARD_PAYMENTS",
+        );
+        const groupsById = new Map(
+            categoryGroups.map((group) => [group.id, group]),
+        );
 
         const normalisedCategories = categories
-            .flatMap(item => Array.isArray(item.categories) ? item.categories : [item])
-            .map(category => ({
+            .flatMap((item) =>
+                Array.isArray(item.categories) ? item.categories : [item],
+            )
+            .map((category) => ({
                 ...category,
                 id: category.id ?? category.categoryId,
                 name: category.name ?? category.categoryName,
                 groupId: category.categoryGroupId ?? category.groupId,
             }))
-            .filter(category => (
-                category.id
-                && category.isHidden === false
-                && (!category.groupId || groupsById.has(category.groupId))
-            ))
-            .map(category => ({
+            .filter(
+                (category) =>
+                    category.id &&
+                    category.isHidden === false &&
+                    (!category.groupId || groupsById.has(category.groupId)),
+            )
+            .map((category) => ({
                 ...category,
                 group: groupsById.get(category.groupId),
             }))
             .sort((left, right) => {
-                const groupOrder = (left.group?.order ?? Infinity) - (right.group?.order ?? Infinity);
-                return groupOrder || ((left.order ?? Infinity) - (right.order ?? Infinity));
+                const groupOrder =
+                    (left.group?.order ?? Infinity) -
+                    (right.group?.order ?? Infinity);
+                return (
+                    groupOrder ||
+                    (left.order ?? Infinity) - (right.order ?? Infinity)
+                );
             });
 
         return normalisedCategories;
@@ -317,19 +419,31 @@ const ZSCategories = {
 
 const groups = {
     list() {
-        try { return JSON.parse(localStorage.getItem(STORAGE_KEYS.groups)) ?? []; } catch { return []; }
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEYS.groups)) ?? [];
+        } catch {
+            return [];
+        }
     },
     save(value) {
         localStorage.setItem(STORAGE_KEYS.groups, JSON.stringify(value));
         mirrorStorage("accountGroups", value);
         markCloudDirty();
     },
-    create() { this.save([...this.list(), { id: createUuidV7(), name: "" }]); },
-    update(group) { this.save(this.list().map(item => item.id === group.id ? group : item)); },
-    remove(id) { this.save(this.list().filter(group => group.id !== id)); },
+    create() {
+        this.save([...this.list(), { id: createUuidV7(), name: "" }]);
+    },
+    update(group) {
+        this.save(
+            this.list().map((item) => (item.id === group.id ? group : item)),
+        );
+    },
+    remove(id) {
+        this.save(this.list().filter((group) => group.id !== id));
+    },
     move(id, offset) {
         const value = this.list();
-        const index = value.findIndex(group => group.id === id);
+        const index = value.findIndex((group) => group.id === id);
         const target = index + offset;
         if (index < 0 || target < 0 || target >= value.length) return;
         [value[index], value[target]] = [value[target], value[index]];
@@ -339,14 +453,29 @@ const groups = {
 
 const assignmentState = () => {
     try {
-        const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.assignments)) ?? {};
-        return all[current.budgetId] ?? { accounts: {}, categories: {}, categoryGroups: {} };
-    } catch { return { accounts: {}, categories: {}, categoryGroups: {} }; }
+        const all =
+            JSON.parse(localStorage.getItem(STORAGE_KEYS.assignments)) ?? {};
+        return (
+            all[current.budgetId] ?? {
+                accounts: {},
+                categories: {},
+                categoryGroups: {},
+            }
+        );
+    } catch {
+        return { accounts: {}, categories: {}, categoryGroups: {} };
+    }
 };
 
 const saveAssignment = (kind, itemId, groupId) => {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.assignments) || "{}");
-    const state = all[current.budgetId] ?? { accounts: {}, categories: {}, categoryGroups: {} };
+    const all = JSON.parse(
+        localStorage.getItem(STORAGE_KEYS.assignments) || "{}",
+    );
+    const state = all[current.budgetId] ?? {
+        accounts: {},
+        categories: {},
+        categoryGroups: {},
+    };
     state[kind] ??= {};
     state[kind][itemId] = groupId;
     all[current.budgetId] = state;
@@ -356,7 +485,9 @@ const saveAssignment = (kind, itemId, groupId) => {
 };
 
 const removeAssignment = (kind, itemId) => {
-    const all = JSON.parse(localStorage.getItem(STORAGE_KEYS.assignments) || "{}");
+    const all = JSON.parse(
+        localStorage.getItem(STORAGE_KEYS.assignments) || "{}",
+    );
     const state = all[current.budgetId];
     if (!state?.[kind]) return;
     delete state[kind][itemId];
@@ -375,7 +506,8 @@ const message = (container, text) => {
 
 const renderGroups = () => {
     elements.accountGroups.replaceChildren();
-    const selectedDefault = localStorage.getItem(STORAGE_KEYS.defaultGroup) || "";
+    const selectedDefault =
+        localStorage.getItem(STORAGE_KEYS.defaultGroup) || "";
     elements.defaultGroup.replaceChildren();
     const noDefault = document.createElement("option");
     noDefault.value = "";
@@ -389,24 +521,38 @@ const renderGroups = () => {
         const input = document.createElement("input");
         input.value = group.name;
         input.readOnly = readOnly;
-        input.addEventListener("input", event => groups.update({ ...group, name: event.target.value }));
+        input.addEventListener("input", (event) =>
+            groups.update({ ...group, name: event.target.value }),
+        );
         const remove = document.createElement("button");
         remove.type = "button";
         remove.disabled = readOnly;
         remove.textContent = "Remove";
-        remove.addEventListener("click", () => { groups.remove(group.id); renderGroups(); renderTables(); });
+        remove.addEventListener("click", () => {
+            groups.remove(group.id);
+            renderGroups();
+            renderTables();
+        });
         const moveUp = document.createElement("button");
         moveUp.type = "button";
         moveUp.disabled = readOnly;
         moveUp.textContent = "↑";
         moveUp.title = "Move group up";
-        moveUp.addEventListener("click", () => { groups.move(group.id, -1); renderGroups(); renderTables(); });
+        moveUp.addEventListener("click", () => {
+            groups.move(group.id, -1);
+            renderGroups();
+            renderTables();
+        });
         const moveDown = document.createElement("button");
         moveDown.type = "button";
         moveDown.disabled = readOnly;
         moveDown.textContent = "↓";
         moveDown.title = "Move group down";
-        moveDown.addEventListener("click", () => { groups.move(group.id, 1); renderGroups(); renderTables(); });
+        moveDown.addEventListener("click", () => {
+            groups.move(group.id, 1);
+            renderGroups();
+            renderTables();
+        });
         label.append(input);
         row.append(label, moveUp, moveDown, remove);
         elements.accountGroups.append(row);
@@ -416,15 +562,25 @@ const renderGroups = () => {
         option.textContent = group.name || "Unnamed group";
         elements.defaultGroup.append(option);
     }
-    elements.defaultGroup.value = groups.list().some(group => group.id === selectedDefault) ? selectedDefault : "";
+    elements.defaultGroup.value = groups
+        .list()
+        .some((group) => group.id === selectedDefault)
+        ? selectedDefault
+        : "";
 };
 
 const renderTable = (container, title, rows, kind) => {
     container.replaceChildren();
     const groupList = groups.list();
     const defaultGroupId = localStorage.getItem(STORAGE_KEYS.defaultGroup);
-    if (!rows.length) { message(container, `No ${title.toLowerCase()} found.`); return; }
-    if (!groupList.length) { message(container, "Create an account group first."); return; }
+    if (!rows.length) {
+        message(container, `No ${title.toLowerCase()} found.`);
+        return;
+    }
+    if (!groupList.length) {
+        message(container, "Create an account group first.");
+        return;
+    }
 
     const scroll = document.createElement("div");
     scroll.className = "table-scroll";
@@ -455,19 +611,38 @@ const renderTable = (container, title, rows, kind) => {
             groupCell.textContent = row.group?.name || "Ungrouped";
             groupRow.append(groupCell);
             if (row.group?.id) {
-                const hasGroupAssignment = Object.prototype.hasOwnProperty.call(state.categoryGroups ?? {}, row.group.id);
-                const groupAssignment = hasGroupAssignment ? state.categoryGroups[row.group.id] : defaultGroupId;
+                const hasGroupAssignment = Object.prototype.hasOwnProperty.call(
+                    state.categoryGroups ?? {},
+                    row.group.id,
+                );
+                const groupAssignment = hasGroupAssignment
+                    ? state.categoryGroups[row.group.id]
+                    : defaultGroupId;
                 for (const group of groupList) {
                     const cell = document.createElement("td");
                     const checkbox = document.createElement("input");
                     checkbox.type = "checkbox";
                     checkbox.disabled = readOnly;
                     checkbox.checked = groupAssignment === group.id;
-                    checkbox.setAttribute("aria-label", `${row.group.name}: ${group.name || "Unnamed group"}`);
+                    checkbox.setAttribute(
+                        "aria-label",
+                        `${row.group.name}: ${group.name || "Unnamed group"}`,
+                    );
                     checkbox.addEventListener("change", () => {
-                        if (checkbox.checked) saveAssignment("categoryGroups", row.group.id, group.id);
-                        else if (hasGroupAssignment) removeAssignment("categoryGroups", row.group.id);
-                        else saveAssignment("categoryGroups", row.group.id, null);
+                        if (checkbox.checked)
+                            saveAssignment(
+                                "categoryGroups",
+                                row.group.id,
+                                group.id,
+                            );
+                        else if (hasGroupAssignment)
+                            removeAssignment("categoryGroups", row.group.id);
+                        else
+                            saveAssignment(
+                                "categoryGroups",
+                                row.group.id,
+                                null,
+                            );
                         renderTables();
                     });
                     cell.append(checkbox);
@@ -480,13 +655,18 @@ const renderTable = (container, title, rows, kind) => {
             previousGroupId = row.group?.id;
         }
         const tr = document.createElement("tr");
-        const hasOverride = kind === "categories"
-            && Object.prototype.hasOwnProperty.call(state.categories, row.id);
-        const inheritedGroupId = kind === "categories" && !hasOverride
-            ? (Object.prototype.hasOwnProperty.call(state.categoryGroups ?? {}, row.group?.id)
-                ? state.categoryGroups[row.group?.id]
-                : defaultGroupId)
-            : null;
+        const hasOverride =
+            kind === "categories" &&
+            Object.prototype.hasOwnProperty.call(state.categories, row.id);
+        const inheritedGroupId =
+            kind === "categories" && !hasOverride
+                ? Object.prototype.hasOwnProperty.call(
+                      state.categoryGroups ?? {},
+                      row.group?.id,
+                  )
+                    ? state.categoryGroups[row.group?.id]
+                    : defaultGroupId
+                : null;
         if (inheritedGroupId) tr.classList.add("inherited-assignment");
         const name = document.createElement("td");
         name.textContent = row.name || "Unnamed";
@@ -496,17 +676,32 @@ const renderTable = (container, title, rows, kind) => {
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             checkbox.disabled = readOnly;
-            const hasAssignment = Object.prototype.hasOwnProperty.call(state[kind], row.id);
-            const assignedGroupId = kind === "categories"
-                ? (hasOverride ? state.categories[row.id] : inheritedGroupId)
-                : (hasAssignment ? state[kind][row.id] : defaultGroupId);
+            const hasAssignment = Object.prototype.hasOwnProperty.call(
+                state[kind],
+                row.id,
+            );
+            const assignedGroupId =
+                kind === "categories"
+                    ? hasOverride
+                        ? state.categories[row.id]
+                        : inheritedGroupId
+                    : hasAssignment
+                      ? state[kind][row.id]
+                      : defaultGroupId;
             checkbox.checked = assignedGroupId === group.id;
-            checkbox.setAttribute("aria-label", `${row.name || "Unnamed"}: ${group.name || "Unnamed group"}`);
+            checkbox.setAttribute(
+                "aria-label",
+                `${row.name || "Unnamed"}: ${group.name || "Unnamed group"}`,
+            );
             checkbox.addEventListener("change", () => {
                 if (!checkbox.checked && kind === "categories" && hasOverride) {
                     removeAssignment(kind, row.id);
                 } else {
-                    saveAssignment(kind, row.id, checkbox.checked ? group.id : null);
+                    saveAssignment(
+                        kind,
+                        row.id,
+                        checkbox.checked ? group.id : null,
+                    );
                 }
                 renderTables();
             });
@@ -522,10 +717,15 @@ const renderTable = (container, title, rows, kind) => {
 
 const renderTables = () => {
     renderTable(elements.accounts, "Account", current.accounts, "accounts");
-    renderTable(elements.categories, "Category", current.categories, "categories");
+    renderTable(
+        elements.categories,
+        "Category",
+        current.categories,
+        "categories",
+    );
 };
 
-const loadBudget = async budgetId => {
+const loadBudget = async (budgetId) => {
     current.budgetId = budgetId;
     localStorage.setItem(STORAGE_KEYS.budget, budgetId);
     message(elements.accounts, "Loading accounts…");
@@ -536,49 +736,84 @@ const loadBudget = async budgetId => {
             ZSAccountGroups.list(budgetId),
             ZSCategories.list(budgetId),
         ]);
-        current.apiAccountGroups = accountGroups.sort((left, right) => Number(left.order ?? Infinity) - Number(right.order ?? Infinity));
+        current.apiAccountGroups = accountGroups.sort(
+            (left, right) =>
+                Number(left.order ?? Infinity) -
+                Number(right.order ?? Infinity),
+        );
         renderGroups();
-        const accountGroupOrder = new Map(current.apiAccountGroups.map((group, index) => [group.id, index]));
-        current.accounts = [...accountData.bankAccounts, ...accountData.loanAccounts]
-            .filter(account => ["budget", "credit_card"].includes(String(account.type).toLowerCase()) && account.closed === false)
+        const accountGroupOrder = new Map(
+            current.apiAccountGroups.map((group, index) => [group.id, index]),
+        );
+        current.accounts = [
+            ...accountData.bankAccounts,
+            ...accountData.loanAccounts,
+        ]
+            .filter(
+                (account) =>
+                    ["budget", "credit_card"].includes(
+                        String(account.type).toLowerCase(),
+                    ) && account.closed === false,
+            )
             .sort((left, right) => {
                 const leftType = left.type === "credit_card" ? 0 : 1;
                 const rightType = right.type === "credit_card" ? 0 : 1;
-                const leftGroup = accountGroupOrder.get(left.accountGroupId) ?? -1;
-                const rightGroup = accountGroupOrder.get(right.accountGroupId) ?? -1;
-                return leftType - rightType
-                    || leftGroup - rightGroup
-                    || Number(left.order ?? Infinity) - Number(right.order ?? Infinity);
+                const leftGroup =
+                    accountGroupOrder.get(left.accountGroupId) ?? -1;
+                const rightGroup =
+                    accountGroupOrder.get(right.accountGroupId) ?? -1;
+                return (
+                    leftType - rightType ||
+                    leftGroup - rightGroup ||
+                    Number(left.order ?? Infinity) -
+                        Number(right.order ?? Infinity)
+                );
             });
         mirrorStorage("accounts", current.accounts);
         current.categories = categories;
         mirrorStorage("selectedBudget", budgetId);
         mirrorStorage("categories", current.categories);
-        const categoryGroups = [...new Map(
-            categories
-                .filter(category => category.group?.id)
-                .map(category => [category.group.id, { id: category.group.id, name: category.group.name }]),
-        ).values()];
+        const categoryGroups = [
+            ...new Map(
+                categories
+                    .filter((category) => category.group?.id)
+                    .map((category) => [
+                        category.group.id,
+                        { id: category.group.id, name: category.group.name },
+                    ]),
+            ).values(),
+        ];
         mirrorStorage("categoryGroups", categoryGroups);
         renderTables();
     } catch (error) {
         message(elements.accounts, `Unable to load accounts: ${error.message}`);
-        message(elements.categories, `Unable to load categories: ${error.message}`);
+        message(
+            elements.categories,
+            `Unable to load categories: ${error.message}`,
+        );
     }
 };
 
-elements.createGroup.addEventListener("click", () => { groups.create(); renderGroups(); renderTables(); });
-elements.defaultGroup.addEventListener("change", event => {
-    if (event.target.value) localStorage.setItem(STORAGE_KEYS.defaultGroup, event.target.value);
+elements.createGroup.addEventListener("click", () => {
+    groups.create();
+    renderGroups();
+    renderTables();
+});
+elements.defaultGroup.addEventListener("change", (event) => {
+    if (event.target.value)
+        localStorage.setItem(STORAGE_KEYS.defaultGroup, event.target.value);
     else localStorage.removeItem(STORAGE_KEYS.defaultGroup);
     mirrorStorage("defaultAccountGroup", event.target.value || null);
     markCloudDirty();
     renderTables();
 });
-elements.budget.addEventListener("change", event => loadBudget(event.target.value));
+elements.budget.addEventListener("change", (event) =>
+    loadBudget(event.target.value),
+);
 elements.copyConfig.addEventListener("click", async () => {
     await navigator.clipboard.writeText(JSON.stringify(getConfig(), null, 2));
-    elements.configStatus.textContent = "Configuration copied. Replace the Gist contents with this JSON.";
+    elements.configStatus.textContent =
+        "Configuration copied. Replace the Gist contents with this JSON.";
 });
 elements.loadRawGist.addEventListener("click", async () => {
     const url = elements.gistRawUrl.value.trim();
@@ -593,7 +828,8 @@ elements.loadRawGist.addEventListener("click", async () => {
         cloudConfigLoaded = true;
         renderGroups();
         renderTables();
-        elements.configStatus.textContent = "Loaded from raw Gist. Copy JSON to save changes manually.";
+        elements.configStatus.textContent =
+            "Loaded from raw Gist. Copy JSON to save changes manually.";
     } catch (error) {
         elements.configStatus.textContent = `Unable to load raw Gist: ${error.message}`;
     }
@@ -602,14 +838,20 @@ elements.loadRawGist.addEventListener("click", async () => {
 elements.loadOpengistGists.addEventListener("click", loadOpengistGists);
 elements.opengistGist.addEventListener("change", async () => {
     let baseUrl;
-    try { baseUrl = getOpengistBaseUrl(); } catch (error) {
+    try {
+        baseUrl = getOpengistBaseUrl();
+    } catch (error) {
         elements.configStatus.textContent = error.message;
         return;
     }
     const token = elements.opengistToken.value.trim();
     if (!token || !elements.opengistGist.value) return;
     try {
-        const detail = await opengistFetch(baseUrl, `/gists/${encodeURIComponent(elements.opengistGist.value)}`, token);
+        const detail = await opengistFetch(
+            baseUrl,
+            `/gists/${encodeURIComponent(elements.opengistGist.value)}`,
+            token,
+        );
         opengistDetails.set(detail.id, detail);
         renderOpengistFiles();
     } catch (error) {
@@ -619,7 +861,9 @@ elements.opengistGist.addEventListener("change", async () => {
 
 elements.useOpengist.addEventListener("click", async () => {
     let baseUrl;
-    try { baseUrl = getOpengistBaseUrl(); } catch (error) {
+    try {
+        baseUrl = getOpengistBaseUrl();
+    } catch (error) {
         elements.configStatus.textContent = error.message;
         return;
     }
@@ -632,17 +876,26 @@ elements.useOpengist.addEventListener("click", async () => {
     }
     const url = opengistRawUrl(baseUrl, gist, fileName);
     try {
-        if (!await ensureOpengistHostPermission(baseUrl)) {
-            elements.configStatus.textContent = "Permission to access this OpenGist server was denied.";
+        if (!(await ensureOpengistHostPermission(baseUrl))) {
+            elements.configStatus.textContent =
+                "Permission to access this OpenGist server was denied.";
             return;
         }
         await pullGist(url, token);
-        setCloudStorage({ mode: "opengist", url, token, gistId: gist.id, fileName, baseUrl });
+        setCloudStorage({
+            mode: "opengist",
+            url,
+            token,
+            gistId: gist.id,
+            fileName,
+            baseUrl,
+        });
         setReadOnly(false);
         cloudConfigLoaded = true;
         renderGroups();
         renderTables();
-        elements.configStatus.textContent = "Loaded from OpenGist. Changes will save automatically.";
+        elements.configStatus.textContent =
+            "Loaded from OpenGist. Changes will save automatically.";
     } catch (error) {
         elements.configStatus.textContent = `Unable to load OpenGist file: ${error.message}`;
     }
@@ -652,7 +905,9 @@ const initialise = async () => {
     const gistUrl = localStorage.getItem(STORAGE_KEYS.gistUrl) || "";
     const gistToken = localStorage.getItem(STORAGE_KEYS.gistToken) || "";
     const gistBaseUrl = localStorage.getItem(STORAGE_KEYS.gistBaseUrl) || "";
-    const gistMode = localStorage.getItem(STORAGE_KEYS.gistMode) || (gistToken ? "opengist" : "raw");
+    const gistMode =
+        localStorage.getItem(STORAGE_KEYS.gistMode) ||
+        (gistToken ? "opengist" : "raw");
     if (gistMode === "raw") elements.gistRawUrl.value = gistUrl;
     if (gistMode === "opengist") {
         elements.opengistUrl.value = gistBaseUrl;
@@ -661,22 +916,33 @@ const initialise = async () => {
     mirrorStorage(STORAGE_KEYS.gistUrl, gistUrl || null);
     mirrorStorage(STORAGE_KEYS.gistToken, gistToken || null);
     mirrorStorage(STORAGE_KEYS.gistMode, gistMode);
-    mirrorStorage(STORAGE_KEYS.gistId, localStorage.getItem(STORAGE_KEYS.gistId) || null);
-    mirrorStorage(STORAGE_KEYS.gistFile, localStorage.getItem(STORAGE_KEYS.gistFile) || null);
+    mirrorStorage(
+        STORAGE_KEYS.gistId,
+        localStorage.getItem(STORAGE_KEYS.gistId) || null,
+    );
+    mirrorStorage(
+        STORAGE_KEYS.gistFile,
+        localStorage.getItem(STORAGE_KEYS.gistFile) || null,
+    );
     mirrorStorage(STORAGE_KEYS.gistBaseUrl, gistBaseUrl || null);
     if (gistUrl) {
         try {
             await pullGist(gistUrl, gistToken);
             setReadOnly(false);
             cloudConfigLoaded = true;
-            elements.configStatus.textContent = gistMode === "opengist"
-                ? "Loaded from OpenGist. Changes will save automatically."
-                : "Loaded from raw Gist. Copy JSON to save changes manually.";
+            elements.configStatus.textContent =
+                gistMode === "opengist"
+                    ? "Loaded from OpenGist. Changes will save automatically."
+                    : "Loaded from raw Gist. Copy JSON to save changes manually.";
         } catch (error) {
             elements.configStatus.textContent = `Unable to load Gist: ${error.message}`;
         }
     }
-    try { applyConfig(getConfig()); } catch (error) { console.warn("Unable to migrate config IDs", error); }
+    try {
+        applyConfig(getConfig());
+    } catch (error) {
+        console.warn("Unable to migrate config IDs", error);
+    }
     renderGroups();
     mirrorStorage("accountGroups", groups.list());
     try {
@@ -687,7 +953,10 @@ const initialise = async () => {
     } catch {
         mirrorStorage("accountGroupAssignments", {});
     }
-    mirrorStorage("defaultAccountGroup", localStorage.getItem(STORAGE_KEYS.defaultGroup));
+    mirrorStorage(
+        "defaultAccountGroup",
+        localStorage.getItem(STORAGE_KEYS.defaultGroup),
+    );
     try {
         const budgets = await ZSBudgets.list();
         for (const budget of budgets) {
@@ -697,12 +966,22 @@ const initialise = async () => {
             elements.budget.append(option);
         }
         const saved = localStorage.getItem(STORAGE_KEYS.budget);
-        const budgetId = budgets.some(budget => budget.id === saved) ? saved : budgets[0]?.id;
-        if (budgetId) { elements.budget.value = budgetId; await loadBudget(budgetId); }
-        else { message(elements.accounts, "No budgets found."); message(elements.categories, "No budgets found."); }
+        const budgetId = budgets.some((budget) => budget.id === saved)
+            ? saved
+            : budgets[0]?.id;
+        if (budgetId) {
+            elements.budget.value = budgetId;
+            await loadBudget(budgetId);
+        } else {
+            message(elements.accounts, "No budgets found.");
+            message(elements.categories, "No budgets found.");
+        }
     } catch (error) {
         message(elements.accounts, `Unable to load budgets: ${error.message}`);
-        message(elements.categories, `Unable to load budgets: ${error.message}`);
+        message(
+            elements.categories,
+            `Unable to load budgets: ${error.message}`,
+        );
     }
 };
 

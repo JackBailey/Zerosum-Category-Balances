@@ -1,10 +1,9 @@
 const isOverviewPage = () => {
     // /budget/id, not /budget/id/
     const pathParts = window.location.pathname.split("/");
-    if (pathParts[2])
-        return false;
+    if (pathParts[2]) return false;
     return true;
-}
+};
 
 const waitForElement = (selector, callback) => {
     // Check if it already exists first
@@ -27,29 +26,34 @@ const waitForElement = (selector, callback) => {
         childList: true,
         subtree: true,
     });
-}
+};
 
 const extensionApi = globalThis.browser ?? globalThis.chrome;
 
-const formatCurrency = cents => `£${(Number(cents || 0) / 100).toLocaleString("en-GB", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-})}`;
+const formatCurrency = (cents) =>
+    `£${(Number(cents || 0) / 100).toLocaleString("en-GB", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
 
-const amountFor = item => Number(
-    item.balance
-    ?? item.available
-    ?? ((item.clearedBalance ?? 0) + (item.unclearedBalance ?? 0))
-    ?? item.amount
-    ?? 0,
-);
+const amountFor = (item) =>
+    Number(
+        item.balance ??
+            item.available ??
+            (item.clearedBalance ?? 0) + (item.unclearedBalance ?? 0) ??
+            item.amount ??
+            0,
+    );
 
 const effectiveGroupId = (item, kind, assignments, defaultGroupId) => {
-    if (Object.prototype.hasOwnProperty.call(assignments[kind] ?? {}, item.id)) {
+    if (Object.hasOwn(assignments[kind] ?? {}, item.id)) {
         return assignments[kind][item.id];
     }
-    if (kind === "categories" && item.group?.id
-        && Object.prototype.hasOwnProperty.call(assignments.categoryGroups ?? {}, item.group.id)) {
+    if (
+        kind === "categories" &&
+        item.group?.id &&
+        Object.hasOwn(assignments.categoryGroups ?? {}, item.group.id)
+    ) {
         return assignments.categoryGroups[item.group.id];
     }
     return defaultGroupId;
@@ -63,14 +67,17 @@ const createUuidV7 = () => {
     }
     bytes[6] = (bytes[6] & 0x0f) | 0x70;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    const hex = [...bytes]
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
 
 const findArray = (payload, names) => {
     if (Array.isArray(payload)) return payload;
     if (!payload || typeof payload !== "object") return [];
-    for (const name of names) if (Array.isArray(payload[name])) return payload[name];
+    for (const name of names)
+        if (Array.isArray(payload[name])) return payload[name];
     for (const value of Object.values(payload)) {
         const result = findArray(value, names);
         if (result.length) return result;
@@ -78,7 +85,7 @@ const findArray = (payload, names) => {
     return [];
 };
 
-const findCompactBudget = payload => {
+const findCompactBudget = (payload) => {
     if (!payload || typeof payload !== "object") return null;
     if (payload.budgetsByMonthCompact) return payload;
     for (const value of Object.values(payload)) {
@@ -92,39 +99,60 @@ const normaliseLiveData = (accountsPayload, metaPayload, budgetPayload) => {
     const accounts = [
         ...findArray(accountsPayload, ["bankAccounts"]),
         ...findArray(accountsPayload, ["loanAccounts"]),
-    ].filter(account => (
-        ["budget", "credit_card"].includes(String(account.type).toLowerCase())
-        && account.closed === false
-    ));
-    const categoryGroups = findArray(metaPayload, ["categoryGroups"])
-        .filter(group => group.isHidden === false && group.systemType !== "CREDIT_CARD_PAYMENTS");
-    const groupsById = new Map(categoryGroups.map(group => [group.id, group]));
+    ].filter(
+        (account) =>
+            ["budget", "credit_card"].includes(
+                String(account.type).toLowerCase(),
+            ) && account.closed === false,
+    );
+    const categoryGroups = findArray(metaPayload, ["categoryGroups"]).filter(
+        (group) =>
+            group.isHidden === false &&
+            group.systemType !== "CREDIT_CARD_PAYMENTS",
+    );
+    const groupsById = new Map(
+        categoryGroups.map((group) => [group.id, group]),
+    );
     const categories = findArray(metaPayload, ["categories"])
-        .flatMap(item => Array.isArray(item.categories) ? item.categories : [item])
-        .map(category => ({
+        .flatMap((item) =>
+            Array.isArray(item.categories) ? item.categories : [item],
+        )
+        .map((category) => ({
             ...category,
             id: category.id ?? category.categoryId,
             name: category.name ?? category.categoryName,
             group: groupsById.get(category.categoryGroupId ?? category.groupId),
         }))
-        .filter(category => category.id && category.isHidden === false && category.group);
+        .filter(
+            (category) =>
+                category.id && category.isHidden === false && category.group,
+        );
 
     const budgetRoot = findCompactBudget(budgetPayload);
     const compact = budgetRoot?.budgetsByMonthCompact;
     const monthKeys = compact?.months ?? Object.keys(compact?.cells ?? {});
-    const latestMonth = budgetRoot?.currentMonth ?? monthKeys[monthKeys.length - 1];
+    const latestMonth =
+        budgetRoot?.currentMonth ?? monthKeys[monthKeys.length - 1];
     const monthCells = compact?.cells?.[latestMonth] ?? {};
-    const assignedById = new Map(Object.entries(monthCells).map(([categoryId, values]) => [
-        categoryId,
-        values?.available ?? ((values?.assigned ?? 0) + (values?.activity ?? 0)),
-    ]));
+    const assignedById = new Map(
+        Object.entries(monthCells).map(([categoryId, values]) => [
+            categoryId,
+            values?.available ??
+                (values?.assigned ?? 0) + (values?.activity ?? 0),
+        ]),
+    );
     for (const category of categories) {
-        if (assignedById.has(category.id)) category.balance = assignedById.get(category.id);
+        if (assignedById.has(category.id))
+            category.balance = assignedById.get(category.id);
     }
     return { accounts, categories };
 };
-
-const createTransfer = async (transfer, sourceAccountId, destinationAccountId, button) => {
+const createTransfer = async (
+    transfer,
+    sourceAccountId,
+    destinationAccountId,
+    button,
+) => {
     if (!sourceAccountId || !destinationAccountId) {
         button.textContent = "Accounts required";
         return;
@@ -132,25 +160,29 @@ const createTransfer = async (transfer, sourceAccountId, destinationAccountId, b
     button.disabled = true;
     button.textContent = "Creating…";
     try {
-        const response = await fetch("https://api.zerosumapp.com/trpc/budget.accounts.transactions.create?batch=1", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                "0": {
-                    json: {
-                        accountId: sourceAccountId,
-                        amount: -Math.abs(Math.round(transfer.amount)),
-                        cleared: false,
-                        date: new Date().toISOString().slice(0, 10),
-                        note: "#created-by-zcb",
-                        id: createUuidV7(),
-                        transferAccountId: destinationAccountId,
+        const response = await fetch(
+            "https://api.zerosumapp.com/trpc/budget.accounts.transactions.create?batch=1",
+            {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    0: {
+                        json: {
+                            accountId: sourceAccountId,
+                            amount: -Math.abs(Math.round(transfer.amount)),
+                            cleared: false,
+                            date: new Date().toISOString().slice(0, 10),
+                            note: "#created-by-zcb",
+                            id: createUuidV7(),
+                            transferAccountId: destinationAccountId,
+                        },
                     },
-                },
-            }),
-        });
-        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+                }),
+            },
+        );
+        if (!response.ok)
+            throw new Error(`${response.status} ${response.statusText}`);
         button.textContent = "Created";
     } catch (error) {
         button.disabled = false;
@@ -158,7 +190,7 @@ const createTransfer = async (transfer, sourceAccountId, destinationAccountId, b
     }
 };
 
-const createConfigurationError = message => {
+const createConfigurationError = (message) => {
     const error = document.createElement("p");
     error.className = "category-balances-empty-state category-balances-error";
     error.setAttribute("role", "alert");
@@ -171,42 +203,77 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
     if (!appMain) return;
 
     const stored = await extensionApi.storage.local.get([
-        "accountGroups", "accountGroupAssignments", "accounts", "categories", "defaultAccountGroup", "selectedBudget", "cloudGistUrl", "cloudGistToken",
+        "accountGroups",
+        "accountGroupAssignments",
+        "accounts",
+        "categories",
+        "defaultAccountGroup",
+        "selectedBudget",
+        "cloudGistUrl",
+        "cloudGistToken",
     ]);
     let accountGroups = stored.accountGroups ?? [];
-    const budgetId = stored.selectedBudget || window.location.pathname.split("/")[2];
+    const budgetId =
+        stored.selectedBudget || window.location.pathname.split("/")[2];
     let allAssignments = stored.accountGroupAssignments ?? {};
     let defaultGroupId = stored.defaultAccountGroup || null;
     if (stored.cloudGistUrl) {
-        const cloud = await extensionApi.runtime.sendMessage({ type: "zcb-load-cloud-config", url: stored.cloudGistUrl, token: stored.cloudGistToken });
+        const cloud = await extensionApi.runtime.sendMessage({
+            type: "zcb-load-cloud-config",
+            url: stored.cloudGistUrl,
+            token: stored.cloudGistToken,
+        });
         if (cloud?.ok && cloud.config) {
             accountGroups = cloud.config.accountGroups ?? accountGroups;
-            allAssignments = cloud.config.accountGroupAssignments ?? allAssignments;
+            allAssignments =
+                cloud.config.accountGroupAssignments ?? allAssignments;
             defaultGroupId = cloud.config.defaultAccountGroup ?? defaultGroupId;
         }
     }
     const assignments = allAssignments[budgetId] ?? {
-        accounts: {}, categories: {}, categoryGroups: {},
+        accounts: {},
+        categories: {},
+        categoryGroups: {},
     };
     let accounts = stored.accounts ?? [];
     let categories = stored.categories ?? [];
     try {
-        const live = await extensionApi.runtime.sendMessage({ type: "zcb-load-budget-data", budgetId });
-        if (!live?.ok) throw new Error(live?.error || "Could not load current budget data");
-        ({ accounts, categories } = normaliseLiveData(live.accounts, live.meta, live.budget));
+        const live = await extensionApi.runtime.sendMessage({
+            type: "zcb-load-budget-data",
+            budgetId,
+        });
+        if (!live?.ok)
+            throw new Error(
+                live?.error || "Could not load current budget data",
+            );
+        ({ accounts, categories } = normaliseLiveData(
+            live.accounts,
+            live.meta,
+            live.budget,
+        ));
     } catch (error) {
         console.warn("ZCB: using cached budget data", error);
     }
 
-    const totals = new Map(accountGroups.map(group => [group.id, {
-        group,
-        accounts: [],
-        accountTotal: 0,
-        creditCardTotal: 0,
-        categoryTotal: 0,
-    }]));
+    const totals = new Map(
+        accountGroups.map((group) => [
+            group.id,
+            {
+                group,
+                accounts: [],
+                accountTotal: 0,
+                creditCardTotal: 0,
+                categoryTotal: 0,
+            },
+        ]),
+    );
     for (const account of accounts) {
-        const groupId = effectiveGroupId(account, "accounts", assignments, defaultGroupId);
+        const groupId = effectiveGroupId(
+            account,
+            "accounts",
+            assignments,
+            defaultGroupId,
+        );
         const total = totals.get(groupId);
         if (!total) continue;
         const amount = amountFor(account);
@@ -215,12 +282,17 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
         else total.accountTotal += amount;
     }
     for (const category of categories) {
-        const groupId = effectiveGroupId(category, "categories", assignments, defaultGroupId);
+        const groupId = effectiveGroupId(
+            category,
+            "categories",
+            assignments,
+            defaultGroupId,
+        );
         const total = totals.get(groupId);
         if (total) total.categoryTotal += amountFor(category);
     }
 
-    const summaries = [...totals.values()].map(total => ({
+    const summaries = [...totals.values()].map((total) => ({
         ...total,
         required: total.categoryTotal + Math.abs(total.creditCardTotal),
     }));
@@ -229,7 +301,7 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
 
     const overlay = document.createElement("div");
     overlay.className = "category-balances-overlay";
-    overlay.addEventListener("click", event => {
+    overlay.addEventListener("click", (event) => {
         if (event.target === overlay) overlay.remove();
     });
 
@@ -247,17 +319,23 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
     heading.textContent = "Category balances";
     popup.append(close, heading);
 
-    const hasGroupedAccounts = summaries.some(summary => summary.accounts.length);
+    const hasGroupedAccounts = summaries.some(
+        (summary) => summary.accounts.length,
+    );
     if (!accountGroups.length || !accounts.length || !hasGroupedAccounts) {
         let message = "";
         if (!accountGroups.length && !accounts.length) {
-            message = "No account groups or accounts are configured yet. Open Settings to create a group and add accounts to this budget.";
+            message =
+                "No account groups or accounts are configured yet. Open Settings to create a group and add accounts to this budget.";
         } else if (!accountGroups.length) {
-            message = "No account groups are configured yet. Open Settings to create one before using Account Balances.";
+            message =
+                "No account groups are configured yet. Open Settings to create one before using Account Balances.";
         } else if (!accounts.length) {
-            message = "No accounts were found in this budget. Add an account before using Account Balances.";
+            message =
+                "No accounts were found in this budget. Add an account before using Account Balances.";
         } else {
-            message = "No accounts are assigned to an account group yet. Open Settings to assign an account before using Account Balances.";
+            message =
+                "No accounts are assigned to an account group yet. Open Settings to assign an account before using Account Balances.";
         }
         popup.append(createConfigurationError(message));
     } else {
@@ -268,7 +346,8 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
             card.className = "category-balances-card";
             card.innerHTML = `<h2></h2><p>Accounts (Credit Cards): <strong></strong> (<strong></strong>)</p><p>Assigned: <strong></strong></p><p>Total needed: <strong></strong></p>`;
             const values = card.querySelectorAll("strong");
-            card.querySelector("h2").textContent = summary.group.name || "Unnamed group";
+            card.querySelector("h2").textContent =
+                summary.group.name || "Unnamed group";
             values[0].textContent = formatCurrency(summary.accountTotal);
             values[1].textContent = formatCurrency(summary.creditCardTotal);
             values[2].textContent = formatCurrency(summary.categoryTotal);
@@ -278,14 +357,25 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
         popup.append(summaryList);
 
         const transfers = [];
-        const surplus = summaries.filter(summary => summary.accountTotal - summary.required > 0)
-            .map(summary => ({ ...summary, remaining: summary.accountTotal - summary.required }));
-        const deficit = summaries.filter(summary => summary.accountTotal - summary.required < 0)
-            .map(summary => ({ ...summary, remaining: summary.required - summary.accountTotal }));
+        const surplus = summaries
+            .filter((summary) => summary.accountTotal - summary.required > 0)
+            .map((summary) => ({
+                ...summary,
+                remaining: summary.accountTotal - summary.required,
+            }));
+        const deficit = summaries
+            .filter((summary) => summary.accountTotal - summary.required < 0)
+            .map((summary) => ({
+                ...summary,
+                remaining: summary.required - summary.accountTotal,
+            }));
         for (const destination of deficit) {
             for (const source of surplus) {
                 if (destination.remaining <= 0) break;
-                const amount = Math.min(source.remaining, destination.remaining);
+                const amount = Math.min(
+                    source.remaining,
+                    destination.remaining,
+                );
                 if (amount <= 0) continue;
                 transfers.push({ source, destination, amount });
                 source.remaining -= amount;
@@ -299,35 +389,59 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
             popup.append(transferHeading);
             const table = document.createElement("table");
             table.className = "category-balances-transfers";
-            table.innerHTML = "<thead><tr><th>Source Account</th><th>Value</th><th>Destination Account</th><th>From Account</th><th>To Account</th><th>Action</th></tr></thead>";
+            table.innerHTML =
+                "<thead><tr><th>Source Account</th><th>Value</th><th>Destination Account</th><th>From Account</th><th>To Account</th><th>Action</th></tr></thead>";
             const body = document.createElement("tbody");
             for (const transfer of transfers) {
                 const row = document.createElement("tr");
-                const sourceAccounts = transfer.source.accounts.filter(account => account.type !== "credit_card");
-                const destinationAccounts = transfer.destination.accounts.filter(account => account.type !== "credit_card");
-                const fromAccounts = sourceAccounts.length ? sourceAccounts : transfer.source.accounts;
-                const toAccounts = destinationAccounts.length ? destinationAccounts : transfer.destination.accounts;
+                const sourceAccounts = transfer.source.accounts.filter(
+                    (account) => account.type !== "credit_card",
+                );
+                const destinationAccounts =
+                    transfer.destination.accounts.filter(
+                        (account) => account.type !== "credit_card",
+                    );
+                const fromAccounts = sourceAccounts.length
+                    ? sourceAccounts
+                    : transfer.source.accounts;
+                const toAccounts = destinationAccounts.length
+                    ? destinationAccounts
+                    : transfer.destination.accounts;
                 row.innerHTML = `<td></td><td></td><td></td>`;
                 row.children[0].textContent = transfer.source.group.name;
                 row.children[1].textContent = formatCurrency(transfer.amount);
                 row.children[2].textContent = transfer.destination.group.name;
                 const from = document.createElement("select");
                 const to = document.createElement("select");
-                for (const account of fromAccounts) from.add(new Option(account.name, account.id));
-                for (const account of toAccounts) to.add(new Option(account.name, account.id));
-                const highestBalanceSource = [...fromAccounts]
-                    .sort((left, right) => amountFor(right) - amountFor(left))[0];
+                for (const account of fromAccounts)
+                    from.add(new Option(account.name, account.id));
+                for (const account of toAccounts)
+                    to.add(new Option(account.name, account.id));
+                const highestBalanceSource = [...fromAccounts].sort(
+                    (left, right) => amountFor(right) - amountFor(left),
+                )[0];
                 if (highestBalanceSource) from.value = highestBalanceSource.id;
-                const highestBalanceDestination = [...toAccounts]
-                    .sort((left, right) => amountFor(right) - amountFor(left))[0];
-                if (highestBalanceDestination) to.value = highestBalanceDestination.id;
+                const highestBalanceDestination = [...toAccounts].sort(
+                    (left, right) => amountFor(right) - amountFor(left),
+                )[0];
+                if (highestBalanceDestination)
+                    to.value = highestBalanceDestination.id;
                 const actionCell = document.createElement("td");
                 const button = document.createElement("button");
                 button.type = "button";
-                button.textContent = fromAccounts.length && toAccounts.length ? "Create" : "No account";
+                button.textContent =
+                    fromAccounts.length && toAccounts.length
+                        ? "Create"
+                        : "No account";
                 button.disabled = !fromAccounts.length || !toAccounts.length;
-                button.addEventListener("click", () => createTransfer(transfer, from.value, to.value, button));
-                row.append(document.createElement("td"), document.createElement("td"), actionCell);
+                button.addEventListener("click", () =>
+                    createTransfer(transfer, from.value, to.value, button),
+                );
+                row.append(
+                    document.createElement("td"),
+                    document.createElement("td"),
+                    actionCell,
+                );
                 row.children[3].append(from);
                 row.children[4].append(to);
                 actionCell.append(button);
@@ -514,18 +628,27 @@ const addPopupStyles = () => {
 
 addPopupStyles();
 
-const isBudgetOverview = () => /^\/budget\/[^/]+\/?$/.test(window.location.pathname);
+const isBudgetOverview = () =>
+    /^\/budget\/[^/]+\/?$/.test(window.location.pathname);
 
 const renderOverview = async () => {
     if (!isBudgetOverview()) return;
     const side = document.querySelector("#budget-table-side");
-    const source = side?.querySelector(":scope > section") || side?.querySelector("section");
-    if (!side || side.dataset.zcbRendering || side.querySelector("[data-zcb-overview]") || !source) return;
+    const source =
+        side?.querySelector(":scope > section") ||
+        side?.querySelector("section");
+    if (
+        !side ||
+        side.dataset.zcbRendering ||
+        side.querySelector("[data-zcb-overview]") ||
+        !source
+    )
+        return;
     side.dataset.zcbRendering = "true";
 
     const overview = source.cloneNode(true);
     overview.setAttribute("data-zcb-overview", "true");
-    overview.querySelectorAll("h4 svg").forEach(svg => svg.remove());
+    overview.querySelectorAll("h4 svg").forEach((svg) => svg.remove());
     const heading = overview.querySelector("h4 button span");
     if (heading) heading.textContent = "Account Balances";
 
@@ -571,7 +694,9 @@ const renderOverview = async () => {
     const settings = document.createElement("button");
     settings.type = "button";
     settings.textContent = "Settings";
-    settings.addEventListener("click", () => extensionApi.runtime.sendMessage({ type: "zcb-open-options" }));
+    settings.addEventListener("click", () =>
+        extensionApi.runtime.sendMessage({ type: "zcb-open-options" }),
+    );
     actions.append(openPopup, settings);
     const overviewHeading = overview.querySelector("h4");
     if (overviewHeading) {
@@ -589,7 +714,8 @@ const renderOverview = async () => {
 };
 
 const initialise = () => {
-    if (isBudgetOverview()) waitForElement("#budget-table-side", renderOverview);
+    if (isBudgetOverview())
+        waitForElement("#budget-table-side", renderOverview);
     else document.querySelector("[data-zcb-overview]")?.remove();
 };
 
@@ -597,4 +723,7 @@ initialise();
 window.addEventListener("popstate", initialise);
 window.addEventListener("hashchange", initialise);
 const overviewObserver = new MutationObserver(initialise);
-overviewObserver.observe(document.documentElement, { childList: true, subtree: true });
+overviewObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+});
