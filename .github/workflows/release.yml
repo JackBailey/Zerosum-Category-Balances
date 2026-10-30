@@ -1,57 +1,63 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
+    push:
+        branches:
+            - main
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
+    contents: write
+    issues: write
+    pull-requests: write
 
 jobs:
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    release:
+        name: Release
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-      - name: Create release pull request
-        id: release
-        uses: googleapis/release-please-action@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
+            - uses: pnpm/action-setup@v4
+              with:
+                  version: 11.28.2
 
-      - name: Pack extension
-        if: ${{ steps.release.outputs.release_created }}
-        uses: cardinalby/webext-buildtools-pack-extension-dir-action@v1
-        with:
-          extensionDir: src
-          zipFilePath: build/source.zip
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
 
-      - name: Build Chrome release files
-        if: ${{ steps.release.outputs.release_created }}
-        uses: cardinalby/webext-buildtools-chrome-crx-action@v2
-        with:
-          zipFilePath: build/source.zip
-          crxFilePath: build/zerosum-category-balances.crx
-          privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY }}
-          updateXmlPath: build/zerosum-category-balances.xml
-          updateXmlCodebaseUrl: https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/zerosum-category-balances.crx
+            - run: pnpm install --frozen-lockfile
 
-      - name: Package CRX for download
-        if: ${{ steps.release.outputs.release_created }}
-        run: zip -j build/zerosum-category-balances.zip build/zerosum-category-balances.crx
+            - name: Create semantic release
+              id: release
+              run: pnpm release
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish release assets
-        if: ${{ steps.release.outputs.release_created }}
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.release.outputs.tag_name }}
-          files: |
-            build/zerosum-category-balances.zip
-            build/zerosum-category-balances.crx
-            build/zerosum-category-balances.xml
+            - name: Pack extension
+              if: ${{ steps.release.outputs.version != '' }}
+              uses: cardinalby/webext-buildtools-pack-extension-dir-action@v1
+              with:
+                  extensionDir: src
+                  zipFilePath: build/source.zip
+
+            - name: Build Chrome release files
+              if: ${{ steps.release.outputs.version != '' }}
+              uses: cardinalby/webext-buildtools-chrome-crx-action@v2
+              with:
+                  zipFilePath: build/source.zip
+                  crxFilePath: build/zerosum-category-balances.crx
+                  privateKey: ${{ secrets.CHROME_CRX_PRIVATE_KEY }}
+                  updateXmlPath: build/zerosum-category-balances.xml
+                  updateXmlCodebaseUrl: https://github.com/JackBailey/Zerosum-Category-Balances/releases/latest/download/zerosum-category-balances.crx
+
+            - name: Package CRX for download
+              if: ${{ steps.release.outputs.version != '' }}
+              run: zip -j build/zerosum-category-balances.zip build/zerosum-category-balances.crx
+
+            - name: Publish release assets
+              if: ${{ steps.release.outputs.version != '' }}
+              run: gh release upload "v${{ steps.release.outputs.version }}" build/zerosum-category-balances.zip build/zerosum-category-balances.crx build/zerosum-category-balances.xml
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
