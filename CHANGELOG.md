@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/JackBailey/Zerosum-Category-Balances/compare/v1.2.0...v1.2.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* Show loading message when opening popup ([519a62e](https://github.com/JackBailey/Zerosum-Category-Balances/commit/519a62e1932bb1367cd73b5a87420e8194256365))
+
 # [1.2.0](https://github.com/JackBailey/Zerosum-Category-Balances/compare/v1.1.2...v1.2.0) (2026-11-01)
 
 
