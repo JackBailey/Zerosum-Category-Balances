@@ -678,43 +678,14 @@ const renderOverview = async () => {
     const heading = overview.querySelector("h4 button span");
     if (heading) heading.textContent = "Account Balances";
 
-    const overlay = await showCategoryGroups({ attach: false });
-    if (!overlay) {
-        delete side.dataset.zcbRendering;
-        return;
-    }
-    const transfers = overlay.querySelector(".category-balances-transfers");
-    overlay.remove();
-
     const nestedSections = overview.querySelectorAll("section");
     const content = nestedSections[nestedSections.length - 1] || overview;
     content.replaceChildren();
-    const error = overlay.querySelector(".category-balances-error");
-    if (error) content.append(error.cloneNode(true));
-    const balancedState = overlay.querySelector(
-        ".category-balances-balanced-state",
-    );
-    if (balancedState) content.append(balancedState.cloneNode(true));
-    if (transfers) {
-        const blocks = document.createElement("div");
-        blocks.className = "category-balances-transfer-blocks";
-        for (const row of transfers.querySelectorAll("tbody tr")) {
-            const block = document.createElement("article");
-            block.className = "category-balances-transfer-block";
-            const summary = document.createElement("strong");
-            summary.textContent = `${row.cells[0].textContent} => ${row.cells[1].textContent} => ${row.cells[2].textContent}`;
-            block.append(summary);
-            const fromLabel = document.createElement("label");
-            fromLabel.textContent = "From: ";
-            fromLabel.append(row.cells[3].firstElementChild);
-            const toLabel = document.createElement("label");
-            toLabel.textContent = "To: ";
-            toLabel.append(row.cells[4].firstElementChild);
-            block.append(fromLabel, toLabel, row.cells[5].firstElementChild);
-            blocks.append(block);
-        }
-        content.append(blocks);
-    }
+    const loadingState = document.createElement("span");
+    loadingState.className = "text-xs text-muted-foreground line-clamp-2 p-3";
+    loadingState.textContent = "Loading account balances…";
+    content.append(loadingState);
+
     const actions = document.createElement("div");
     actions.className = "category-balances-actions";
     const createActionButton = (templateSelector, ariaLabel) => {
@@ -791,6 +762,43 @@ const renderOverview = async () => {
     updateSidebarCollapsedState(savedCollapsedState);
 
     source.parentElement.insertBefore(overview, source);
+
+    const overlay = await showCategoryGroups({ attach: false });
+    if (!overlay) {
+        loadingState.textContent = "Could not load account balances.";
+        delete side.dataset.zcbRendering;
+        return;
+    }
+    const transfers = overlay.querySelector(".category-balances-transfers");
+    overlay.remove();
+
+    content.replaceChildren();
+    const error = overlay.querySelector(".category-balances-error");
+    if (error) content.append(error.cloneNode(true));
+    const balancedState = overlay.querySelector(
+        ".category-balances-balanced-state",
+    );
+    if (balancedState) content.append(balancedState.cloneNode(true));
+    if (transfers) {
+        const blocks = document.createElement("div");
+        blocks.className = "category-balances-transfer-blocks";
+        for (const row of transfers.querySelectorAll("tbody tr")) {
+            const block = document.createElement("article");
+            block.className = "category-balances-transfer-block";
+            const summary = document.createElement("strong");
+            summary.textContent = `${row.cells[0].textContent} => ${row.cells[1].textContent} => ${row.cells[2].textContent}`;
+            block.append(summary);
+            const fromLabel = document.createElement("label");
+            fromLabel.textContent = "From: ";
+            fromLabel.append(row.cells[3].firstElementChild);
+            const toLabel = document.createElement("label");
+            toLabel.textContent = "To: ";
+            toLabel.append(row.cells[4].firstElementChild);
+            block.append(fromLabel, toLabel, row.cells[5].firstElementChild);
+            blocks.append(block);
+        }
+        content.append(blocks);
+    }
     delete side.dataset.zcbRendering;
 };
 
