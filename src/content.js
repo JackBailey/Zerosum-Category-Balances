@@ -469,6 +469,13 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
             }
             table.append(body);
             popup.append(table);
+        } else {
+            const balanced = document.createElement("span");
+            balanced.className =
+                "text-xs text-muted-foreground line-clamp-2 p-3 category-balances-balanced-state";
+            balanced.textContent =
+                "All balances are balanced. No transfers needed.";
+            popup.append(balanced);
         }
     }
 
@@ -685,6 +692,10 @@ const renderOverview = async () => {
     content.replaceChildren();
     const error = overlay.querySelector(".category-balances-error");
     if (error) content.append(error.cloneNode(true));
+    const balancedState = overlay.querySelector(
+        ".category-balances-balanced-state",
+    );
+    if (balancedState) content.append(balancedState.cloneNode(true));
     if (transfers) {
         const blocks = document.createElement("div");
         blocks.className = "category-balances-transfer-blocks";
