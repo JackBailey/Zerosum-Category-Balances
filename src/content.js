@@ -717,13 +717,29 @@ const renderOverview = async () => {
     }
     const actions = document.createElement("div");
     actions.className = "category-balances-actions";
-    const openPopup = document.createElement("button");
-    openPopup.type = "button";
-    openPopup.textContent = "Open";
+    const createActionButton = (templateSelector, ariaLabel) => {
+        const template = document.querySelector(templateSelector);
+        const button = template
+            ? template.cloneNode(true)
+            : document.createElement("button");
+        button.type = "button";
+        button.setAttribute("aria-label", ariaLabel);
+        button.setAttribute("title", ariaLabel);
+        if (!template) button.className = "cursor-pointer";
+        button.textContent = "";
+        const svg = template?.querySelector("svg");
+        if (svg) button.append(svg.cloneNode(true));
+        return button;
+    };
+    const openPopup = createActionButton(
+        'button[aria-label="Hide amounts"]',
+        "Open category balances",
+    );
     openPopup.addEventListener("click", () => showCategoryGroups());
-    const settings = document.createElement("button");
-    settings.type = "button";
-    settings.textContent = "Settings";
+    const settings = createActionButton(
+        'button[aria-label="Customize sidebar"]',
+        "Open account balances settings",
+    );
     settings.addEventListener("click", () =>
         extensionApi.runtime.sendMessage({ type: "zcb-open-options" }),
     );
