@@ -222,6 +222,33 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
     const appMain = document.querySelector("#app-main");
     if (!appMain) return;
 
+    appMain.querySelector(".category-balances-overlay")?.remove();
+
+    const overlay = document.createElement("div");
+    overlay.className = "category-balances-overlay";
+    overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) overlay.remove();
+    });
+
+    const popup = document.createElement("section");
+    popup.className = "category-balances-popup";
+
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "category-balances-close";
+    close.setAttribute("aria-label", "Close category groups");
+    close.textContent = "×";
+    close.addEventListener("click", () => overlay.remove());
+
+    const heading = document.createElement("h1");
+    heading.textContent = "Category balances";
+    const loadingState = document.createElement("p");
+    loadingState.className = "category-balances-loading";
+    loadingState.textContent = "Loading account balances…";
+    popup.append(close, heading, loadingState);
+    overlay.append(popup);
+    if (attach) appMain.append(overlay);
+
     const stored = await extensionApi.storage.local.get([
         "accountGroups",
         "accountGroupAssignments",
@@ -317,27 +344,7 @@ const showCategoryGroups = async ({ attach = true } = {}) => {
         required: total.categoryTotal + Math.abs(total.creditCardTotal),
     }));
 
-    appMain.querySelector(".category-balances-overlay")?.remove();
-
-    const overlay = document.createElement("div");
-    overlay.className = "category-balances-overlay";
-    overlay.addEventListener("click", (event) => {
-        if (event.target === overlay) overlay.remove();
-    });
-
-    const popup = document.createElement("section");
-    popup.className = "category-balances-popup";
-
-    const close = document.createElement("button");
-    close.type = "button";
-    close.className = "category-balances-close";
-    close.setAttribute("aria-label", "Close category groups");
-    close.textContent = "×";
-    close.addEventListener("click", () => overlay.remove());
-
-    const heading = document.createElement("h1");
-    heading.textContent = "Category balances";
-    popup.append(close, heading);
+    loadingState.remove();
 
     const hasGroupedAccounts = summaries.some(
         (summary) => summary.accounts.length,
@@ -644,6 +651,12 @@ const addPopupStyles = () => {
         }
         .category-balances-empty-state {
             margin: 0;
+        }
+        .category-balances-loading {
+            color: var(--muted-foreground);
+            font-size: var(--text-sm);
+            margin: 0;
+            padding: var(--spacing);
         }
         .category-balances-error {
             color: var(--muted-foreground);
