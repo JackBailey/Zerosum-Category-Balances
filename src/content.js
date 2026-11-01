@@ -675,7 +675,6 @@ const renderOverview = async () => {
 
     const overview = source.cloneNode(true);
     overview.setAttribute("data-zcb-overview", "true");
-    overview.querySelectorAll("h4 svg").forEach((svg) => svg.remove());
     const heading = overview.querySelector("h4 button span");
     if (heading) heading.textContent = "Account Balances";
 
@@ -739,6 +738,41 @@ const renderOverview = async () => {
     } else {
         content.append(actions);
     }
+
+    const sidebarCollapseStateKey = "zcb-budget-overview-collapsed";
+    const collapseIcon = overviewHeading?.querySelector("svg");
+    const updateSidebarCollapsedState = (collapsed) => {
+        if (content) {
+            if (collapsed) content.setAttribute("hidden", "hidden");
+            else content.removeAttribute("hidden");
+        }
+        if (collapseIcon) {
+            collapseIcon.style.transform = collapsed ? "rotate(-90deg)" : "rotate(0deg)";
+            collapseIcon.style.transformOrigin = "center";
+            collapseIcon.style.transition = "transform 0.15s ease";
+        }
+        if (overviewHeading) {
+            overviewHeading.setAttribute(
+                "aria-expanded",
+                String(!collapsed),
+            );
+        }
+        localStorage.setItem(sidebarCollapseStateKey, String(collapsed));
+    };
+
+    const collapseToggle = overviewHeading?.querySelector("button") ?? overviewHeading;
+    if (overviewHeading) {
+        overviewHeading.addEventListener("click", (event) => {
+            if (event.target.closest(".category-balances-actions")) return;
+            if (event.target.closest("button") && event.target.closest("button") !== collapseToggle) return;
+            event.preventDefault();
+            const willCollapse = !content.hasAttribute("hidden");
+            updateSidebarCollapsedState(willCollapse);
+        });
+    }
+
+    const savedCollapsedState = localStorage.getItem(sidebarCollapseStateKey) === "true";
+    updateSidebarCollapsedState(savedCollapsedState);
 
     source.parentElement.insertBefore(overview, source);
     delete side.dataset.zcbRendering;
